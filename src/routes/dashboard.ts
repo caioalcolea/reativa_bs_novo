@@ -44,10 +44,11 @@ router.get('/stats', async (req: Request, res: Response) => {
     const successRate = totalToday > 0 ? ((parseInt(successCount) / totalToday) * 100).toFixed(1) : '0';
 
     // Mensagens por tipo hoje
-    const messagesByType = await database.query<{ reactivation_type: string; count: string }>(
-      `SELECT reactivation_type, COUNT(*) as count FROM reactivation_logs
+    const messagesByType = await database.query<{ module: string; count: string }>(
+      `SELECT COALESCE(module, reactivation_type) as module, COUNT(*) as count
+       FROM reactivation_logs
        WHERE DATE(sent_at) = CURRENT_DATE
-       GROUP BY reactivation_type
+       GROUP BY COALESCE(module, reactivation_type)
        ORDER BY count DESC`
     );
 
@@ -57,12 +58,6 @@ router.get('/stats', async (req: Request, res: Response) => {
        WHERE next_dose_date BETWEEN CURRENT_DATE AND CURRENT_DATE + INTERVAL '30 days'`
     );
 
-    // Débitos em aberto
-    const [{ sum: total_debts }] = await database.query<{ sum: string }>(
-      `SELECT COALESCE(SUM(amount), 0) as sum FROM financial_debts
-       WHERE paid = FALSE`
-    );
-
     // Consultas agendadas (próximos 7 dias)
     const [{ count: upcoming_appointments }] = await database.query<{ count: string }>(
       `SELECT COUNT(*) as count FROM appointments
@@ -70,27 +65,45 @@ router.get('/stats', async (req: Request, res: Response) => {
        AND status IN ('agendado', 'confirmado')`
     );
 
+    // Pets por espécie
+    const petsBySpecies = await database.query<{ species: string; count: string }>(
+      `SELECT species, COUNT(*) as count FROM pets
+       GROUP BY species
+       ORDER BY count DESC
+       LIMIT 5`
+    );
+
+    // Última sincronização
+    const lastSync = await database.query<{ updated_at: Date }>(
+      `SELECT updated_at FROM pets
+       ORDER BY updated_at DESC
+       LIMIT 1`
+    );
+
     res.json({
       success: true,
       data: {
         customers: parseInt(total_customers),
         pets: parseInt(total_pets),
+        appointments: parseInt(upcoming_appointments),
         messages: {
           today: parseInt(messages_today),
           week: parseInt(messages_week),
           successRate: parseFloat(successRate),
         },
         messagesByType: messagesByType.map(m => ({
-          type: m.reactivation_type,
+          type: m.module,
           count: parseInt(m.count),
         })),
         upcoming: {
           vaccines: parseInt(upcoming_vaccines),
           appointments: parseInt(upcoming_appointments),
         },
-        financial: {
-          totalDebts: parseFloat(total_debts),
-        },
+        petsBySpecies: petsBySpecies.map(p => ({
+          species: p.species,
+          count: parseInt(p.count),
+        })),
+        lastSync: lastSync.length > 0 ? lastSync[0].updated_at : null,
       },
     });
   } catch (error) {
@@ -109,6 +122,8 @@ router.get('/recent-messages', async (req: Request, res: Response) => {
     const messages = await database.query<{
       id: number;
       customer_id: number;
+      pet_id: number;
+      module: string;
       reactivation_type: string;
       message_sent: any;
       sent_at: Date;
@@ -116,19 +131,24 @@ router.get('/recent-messages', async (req: Request, res: Response) => {
       error_message: string | null;
       customer_name: string;
       customer_phone: string;
+      pet_name: string;
     }>(
       `SELECT
         rl.id,
         rl.customer_id,
+        rl.pet_id,
+        COALESCE(rl.module, rl.reactivation_type) as module,
         rl.reactivation_type,
         rl.message_sent,
         rl.sent_at,
         rl.status,
         rl.error_message,
         c.name as customer_name,
-        c.phone as customer_phone
+        c.phone as customer_phone,
+        p.name as pet_name
       FROM reactivation_logs rl
       INNER JOIN customers c ON rl.customer_id = c.id
+      LEFT JOIN pets p ON rl.pet_id = p.id
       ORDER BY rl.sent_at DESC
       LIMIT $1`,
       [limit]
@@ -138,11 +158,12 @@ router.get('/recent-messages', async (req: Request, res: Response) => {
       success: true,
       data: messages.map(m => ({
         id: m.id,
-        type: m.reactivation_type,
+        type: m.module,
         customer: {
           name: m.customer_name,
           phone: m.customer_phone,
         },
+        pet: m.pet_name ? { name: m.pet_name } : null,
         sentAt: m.sent_at,
         status: m.status,
         error: m.error_message,

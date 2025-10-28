@@ -131,12 +131,12 @@ export class GroomingReactivation {
   generatePlanReminderMessage(service: GroomingService): string {
     const lastServiceDate = dateHelpers.formatDate(new Date(service.service_date));
 
-    let message = `Olá! 🐾\n\n`;
-    message += `Tudo bem? Aqui é da *Clínica Veterinária*!\n\n`;
-    message += `Lembrando que *${service.pet_name}* está com o plano de banho mensal ativo! 🛁✨\n\n`;
-    message += `Último banho: *${lastServiceDate}*\n\n`;
-    message += `Que tal agendar o próximo banho do seu pet? Estamos com horários disponíveis! 📅\n\n`;
-    message += `Responda esta mensagem para agendar! 😊`;
+    let message = `📢 *Lembrete de Banho – Clínica Bicho Solto* 🐾\n\n`;
+    message += `Olá, *${service.customer_name}*! Tudo bem? 😊\n\n`;
+    message += `Só lembrando que *${service.pet_name}* está com o plano de banho mensal ativo! 🛁✨\n\n`;
+    message += `📅 Último banho: *${lastServiceDate}*\n\n`;
+    message += `Que tal agendar o próximo banho? Temos horários disponíveis e seu pet vai ficar feliz e cheirosinho! 🐶🐱💙\n\n`;
+    message += `Responda esta mensagem para agendar! Estamos à disposição! 😊`;
 
     return message;
   }
@@ -147,10 +147,10 @@ export class GroomingReactivation {
   async generateNoPlanMessage(service: GroomingService): Promise<string> {
     const lastServiceDate = dateHelpers.formatDate(new Date(service.service_date));
 
-    let message = `Olá! 🐾\n\n`;
-    message += `Tudo bem? Aqui é da *Clínica Veterinária*!\n\n`;
+    let message = `📢 *Lembrete de Banho – Clínica Bicho Solto* 🐾\n\n`;
+    message += `Olá, *${service.customer_name}*! Tudo bem? 😊\n\n`;
     message += `Já faz um tempinho desde o último banho do(a) *${service.pet_name}* (${lastServiceDate})! 🛁\n\n`;
-    message += `Seu pet está precisando de um banho fresquinho? 😊\n\n`;
+    message += `Que tal agendar um banho fresquinho? Seu pet vai adorar! 😊\n\n`;
 
     // Buscar planos específicos para a raça ou planos gerais
     let plans: any[] = [];
