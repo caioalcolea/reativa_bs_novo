@@ -243,105 +243,170 @@ export class VetCareApiService {
   }
 
   /**
-   * Sincroniza todos os pets do VetCare
+   * Sincroniza todos os pets do VetCare com suporte a paginação
    */
   async syncPets(): Promise<{ synced: number; errors: number }> {
     logger.info('Iniciando sincronização de pets do VetCare');
 
+    let synced = 0;
+    let errors = 0;
+    let page = 1;
+    let hasMorePages = true;
+    let totalPetsExpected = 0;
+
     try {
-      logger.info(`GET ${this.config.apiUrl}/pets`);
-      const response = await this.client.get<any>('/pets');
-
-      // A API retorna { data: [...] } não um array direto
-      const petsData = response.data.data || response.data;
-
-      if (!Array.isArray(petsData)) {
-        logger.error('Resposta da API não é um array:', typeof petsData);
-        logger.error('Estrutura recebida:', JSON.stringify(response.data).substring(0, 500));
-        return { synced: 0, errors: 1 };
-      }
-
-      logger.info(`API retornou ${petsData.length} pets`);
-
-      let synced = 0;
-      let errors = 0;
-
-      for (const petData of petsData) {
+      while (hasMorePages) {
         try {
-          // A API já retorna a estrutura correta com cliente_id
-          const pet = petData as VetCarePet;
-          const clienteId = pet.cliente_id || petData.cliente?.id;
+          // Tentar diferentes formatos de paginação
+          const endpoint = `/pets?page=${page}`;
+          logger.info(`GET ${this.config.apiUrl}${endpoint}`);
+          const response = await this.client.get<any>(endpoint);
 
-          if (!clienteId) {
-            logger.warn(`Pet ${pet.id} (${pet.nome}) sem cliente_id - pulando`);
-            errors++;
+          // A API pode retornar { data: [...], meta: {...} } ou apenas um array
+          const responseData = response.data;
+          const petsData = responseData.data || responseData;
+
+          if (!Array.isArray(petsData)) {
+            logger.error('Resposta da API não é um array:', typeof petsData);
+            logger.error('Estrutura recebida:', JSON.stringify(responseData).substring(0, 500));
+            break;
+          }
+
+          // Se não há pets nesta página, terminamos
+          if (petsData.length === 0) {
+            logger.info(`Página ${page} vazia - fim da paginação`);
+            break;
+          }
+
+          logger.info(`Página ${page}: ${petsData.length} pets recebidos`);
+
+          // Verificar se há metadados de paginação
+          if (responseData.meta) {
+            const meta = responseData.meta;
+            totalPetsExpected = meta.total || 0;
+            const currentPage = meta.current_page || page;
+            const lastPage = meta.last_page || meta.total_pages || 0;
+
+            logger.info(`Paginação: página ${currentPage}/${lastPage}, total esperado: ${totalPetsExpected}`);
+
+            // Se chegamos na última página
+            if (currentPage >= lastPage) {
+              hasMorePages = false;
+            }
+          } else if (petsData.length < 20) {
+            // Se não há metadados, assumir que páginas com menos de 20 itens são as últimas
+            logger.info(`Página ${page} com ${petsData.length} pets (< 20) - assumindo última página`);
+            hasMorePages = false;
+          }
+
+          // Processar pets desta página
+          for (const petData of petsData) {
+            try {
+              // A API já retorna a estrutura correta com cliente_id
+              const pet = petData as VetCarePet;
+              const clienteId = pet.cliente_id || petData.cliente?.id;
+
+              if (!clienteId) {
+                logger.warn(`Pet ${pet.id} (${pet.nome}) sem cliente_id - pulando`);
+                errors++;
+                continue;
+              }
+
+              // Verificar se pet já existe
+              const existing = await database.query(
+                'SELECT id FROM pets WHERE id = $1',
+                [pet.id]
+              );
+
+              if (existing.length > 0) {
+                // Atualizar pet existente
+                await database.query(
+                  `UPDATE pets
+                   SET name = $1, species = $2, breed = $3, gender = $4,
+                       birth_date = $5, customer_id = $6, weight = $7,
+                       color = $8, notes = $9, updated_at = NOW()
+                   WHERE id = $10`,
+                  [
+                    pet.nome,
+                    pet.especie,
+                    pet.raca || null,
+                    pet.sexo,
+                    pet.data_nascimento || null,
+                    clienteId,
+                    pet.peso || null,
+                    pet.pelagem || null,
+                    pet.observacoes || null,
+                    pet.id,
+                  ]
+                );
+              } else {
+                // Inserir novo pet
+                await database.query(
+                  `INSERT INTO pets (id, name, species, breed, gender, birth_date, customer_id, weight, color, notes, created_at)
+                   VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, NOW())`,
+                  [
+                    pet.id,
+                    pet.nome,
+                    pet.especie,
+                    pet.raca || null,
+                    pet.sexo,
+                    pet.data_nascimento || null,
+                    clienteId,
+                    pet.peso || null,
+                    pet.pelagem || null,
+                    pet.observacoes || null,
+                  ]
+                );
+              }
+
+              synced++;
+
+              // Log a cada 100 pets para acompanhar progresso
+              if (synced % 100 === 0) {
+                const expected = totalPetsExpected > 0 ? `/${totalPetsExpected}` : '';
+                logger.info(`Progresso: ${synced}${expected} pets sincronizados`);
+              }
+            } catch (error: any) {
+              logger.error(`Erro ao sincronizar pet ${petData.id || 'unknown'}:`, error.message);
+              errors++;
+            }
+          }
+
+          // Próxima página
+          page++;
+
+          // Aguardar 200ms entre páginas para não sobrecarregar a API
+          if (hasMorePages) {
+            await new Promise(resolve => setTimeout(resolve, 200));
+          }
+
+        } catch (error: any) {
+          // Se der 404, provavelmente não há mais páginas
+          if (error.response?.status === 404) {
+            logger.info(`Página ${page} retornou 404 - fim da paginação`);
+            break;
+          }
+
+          this.logRequestError(error, `/pets?page=${page}`);
+
+          // Se for erro de rede ou timeout, tentar mais uma vez
+          if (error.code === 'ECONNRESET' || error.code === 'ETIMEDOUT') {
+            logger.warn(`Erro temporário na página ${page}, tentando novamente...`);
+            await new Promise(resolve => setTimeout(resolve, 2000));
             continue;
           }
 
-          // Verificar se pet já existe
-          const existing = await database.query(
-            'SELECT id FROM pets WHERE id = $1',
-            [pet.id]
-          );
-
-          if (existing.length > 0) {
-            // Atualizar pet existente
-            await database.query(
-              `UPDATE pets
-               SET name = $1, species = $2, breed = $3, gender = $4,
-                   birth_date = $5, customer_id = $6, weight = $7,
-                   color = $8, notes = $9, updated_at = NOW()
-               WHERE id = $10`,
-              [
-                pet.nome,
-                pet.especie,
-                pet.raca || null,
-                pet.sexo,
-                pet.data_nascimento || null,
-                clienteId,
-                pet.peso || null,
-                pet.pelagem || null,
-                pet.observacoes || null,
-                pet.id,
-              ]
-            );
-          } else {
-            // Inserir novo pet
-            await database.query(
-              `INSERT INTO pets (id, name, species, breed, gender, birth_date, customer_id, weight, color, notes, created_at)
-               VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, NOW())`,
-              [
-                pet.id,
-                pet.nome,
-                pet.especie,
-                pet.raca || null,
-                pet.sexo,
-                pet.data_nascimento || null,
-                clienteId,
-                pet.peso || null,
-                pet.pelagem || null,
-                pet.observacoes || null,
-              ]
-            );
-          }
-
-          synced++;
-
-          // Log a cada 100 pets para acompanhar progresso
-          if (synced % 100 === 0) {
-            logger.info(`Progresso: ${synced}/${petsData.length} pets sincronizados`);
-          }
-        } catch (error: any) {
-          logger.error(`Erro ao sincronizar pet ${petData.id || 'unknown'}:`, error.message);
-          errors++;
+          // Outros erros: parar paginação
+          break;
         }
       }
 
-      logger.info(`Sincronização de pets concluída: ${synced} sincronizados, ${errors} erros`);
+      const expected = totalPetsExpected > 0 ? ` (esperado: ${totalPetsExpected})` : '';
+      logger.info(`Sincronização de pets concluída: ${synced} sincronizados${expected}, ${errors} erros`);
       return { synced, errors };
     } catch (error: any) {
       this.logRequestError(error, '/pets');
-      return { synced: 0, errors: 1 };
+      return { synced, errors: errors + 1 };
     }
   }
 
@@ -470,94 +535,167 @@ export class VetCareApiService {
   }
 
   /**
-   * Sincroniza agendamentos do VetCare
+   * Sincroniza agendamentos do VetCare com suporte a paginação
    */
   async syncAppointments(): Promise<{ synced: number; errors: number }> {
     logger.info('Iniciando sincronização de agendamentos do VetCare');
 
+    let synced = 0;
+    let errors = 0;
+    let page = 1;
+    let hasMorePages = true;
+    let totalExpected = 0;
+
     try {
-      logger.info(`GET ${this.config.apiUrl}/agendamentos`);
-      const response = await this.client.get<VetCareAgendamento[]>('/agendamentos');
-      const appointments = response.data;
-
-      if (!Array.isArray(appointments)) {
-        logger.error('Resposta da API não é um array:', typeof appointments);
-        return { synced: 0, errors: 1 };
-      }
-
-      logger.info(`API retornou ${appointments.length} agendamentos`);
-
-      let synced = 0;
-      let errors = 0;
-
-      for (const appointment of appointments) {
+      while (hasMorePages) {
         try {
-          // Mapear tipo de agendamento
-          let appointmentType = 'consulta';
-          const tipo = appointment.tipo?.toLowerCase() || '';
-          if (tipo.includes('retorno')) appointmentType = 'retorno';
-          if (tipo.includes('cirurgia')) appointmentType = 'cirurgia';
-          if (tipo.includes('exame')) appointmentType = 'exame';
+          const endpoint = `/agendamentos?page=${page}`;
+          logger.info(`GET ${this.config.apiUrl}${endpoint}`);
+          const response = await this.client.get<any>(endpoint);
 
-          // Mapear status
-          let status = 'agendado';
-          const statusApi = appointment.status?.toLowerCase() || '';
-          if (statusApi.includes('confirmado')) status = 'confirmado';
-          if (statusApi.includes('concluído') || statusApi.includes('concluido')) status = 'realizado';
-          if (statusApi.includes('cancelado')) status = 'cancelado';
+          const responseData = response.data;
+          const appointments = responseData.data || responseData;
 
-          // Verificar se agendamento já existe
-          const existing = await database.query(
-            'SELECT id FROM appointments WHERE id = $1',
-            [appointment.id]
-          );
-
-          if (existing.length > 0) {
-            // Atualizar agendamento existente
-            await database.query(
-              `UPDATE appointments
-               SET pet_id = $1, appointment_date = $2, appointment_type = $3,
-                   status = $4, notes = $5, amount = $6, updated_at = NOW()
-               WHERE id = $7`,
-              [
-                appointment.pet_id,
-                appointment.data_hora,
-                appointmentType,
-                status,
-                appointment.observacoes || null,
-                appointment.valor || null,
-                appointment.id,
-              ]
-            );
-          } else {
-            // Inserir novo agendamento
-            await database.query(
-              `INSERT INTO appointments (id, pet_id, appointment_date, appointment_type, status, notes, amount, created_at)
-               VALUES ($1, $2, $3, $4, $5, $6, $7, NOW())`,
-              [
-                appointment.id,
-                appointment.pet_id,
-                appointment.data_hora,
-                appointmentType,
-                status,
-                appointment.observacoes || null,
-                appointment.valor || null,
-              ]
-            );
+          if (!Array.isArray(appointments)) {
+            logger.error('Resposta da API não é um array:', typeof appointments);
+            break;
           }
 
-          synced++;
+          if (appointments.length === 0) {
+            logger.info(`Página ${page} vazia - fim da paginação`);
+            break;
+          }
+
+          logger.info(`Página ${page}: ${appointments.length} agendamentos recebidos`);
+
+          // Verificar metadados de paginação
+          if (responseData.meta) {
+            const meta = responseData.meta;
+            totalExpected = meta.total || 0;
+            const currentPage = meta.current_page || page;
+            const lastPage = meta.last_page || meta.total_pages || 0;
+
+            logger.info(`Paginação: página ${currentPage}/${lastPage}, total esperado: ${totalExpected}`);
+
+            if (currentPage >= lastPage) {
+              hasMorePages = false;
+            }
+          } else if (appointments.length < 20) {
+            logger.info(`Página ${page} com ${appointments.length} agendamentos (< 20) - assumindo última página`);
+            hasMorePages = false;
+          }
+
+          // Processar agendamentos desta página
+          for (const appointment of appointments) {
+            try {
+              // Verificar se o pet existe antes de inserir
+              const petExists = await database.query(
+                'SELECT id FROM pets WHERE id = $1',
+                [appointment.pet_id]
+              );
+
+              if (petExists.length === 0) {
+                logger.warn(`Agendamento ${appointment.id} referencia pet_id=${appointment.pet_id} que não existe - pulando`);
+                errors++;
+                continue;
+              }
+
+              // Mapear tipo de agendamento
+              let appointmentType = 'consulta';
+              const tipo = appointment.tipo?.toLowerCase() || '';
+              if (tipo.includes('retorno')) appointmentType = 'retorno';
+              if (tipo.includes('cirurgia')) appointmentType = 'cirurgia';
+              if (tipo.includes('exame')) appointmentType = 'exame';
+
+              // Mapear status
+              let status = 'agendado';
+              const statusApi = appointment.status?.toLowerCase() || '';
+              if (statusApi.includes('confirmado')) status = 'confirmado';
+              if (statusApi.includes('concluído') || statusApi.includes('concluido')) status = 'realizado';
+              if (statusApi.includes('cancelado')) status = 'cancelado';
+
+              // Verificar se agendamento já existe
+              const existing = await database.query(
+                'SELECT id FROM appointments WHERE id = $1',
+                [appointment.id]
+              );
+
+              if (existing.length > 0) {
+                // Atualizar agendamento existente
+                await database.query(
+                  `UPDATE appointments
+                   SET pet_id = $1, appointment_date = $2, appointment_type = $3,
+                       status = $4, notes = $5, amount = $6, updated_at = NOW()
+                   WHERE id = $7`,
+                  [
+                    appointment.pet_id,
+                    appointment.data_hora,
+                    appointmentType,
+                    status,
+                    appointment.observacoes || null,
+                    appointment.valor || null,
+                    appointment.id,
+                  ]
+                );
+              } else {
+                // Inserir novo agendamento
+                await database.query(
+                  `INSERT INTO appointments (id, pet_id, appointment_date, appointment_type, status, notes, amount, created_at)
+                   VALUES ($1, $2, $3, $4, $5, $6, $7, NOW())`,
+                  [
+                    appointment.id,
+                    appointment.pet_id,
+                    appointment.data_hora,
+                    appointmentType,
+                    status,
+                    appointment.observacoes || null,
+                    appointment.valor || null,
+                  ]
+                );
+              }
+
+              synced++;
+
+              if (synced % 100 === 0) {
+                const expected = totalExpected > 0 ? `/${totalExpected}` : '';
+                logger.info(`Progresso: ${synced}${expected} agendamentos sincronizados`);
+              }
+            } catch (error: any) {
+              logger.error(`Erro ao sincronizar agendamento ${appointment.id}:`, error.message);
+              errors++;
+            }
+          }
+
+          page++;
+
+          if (hasMorePages) {
+            await new Promise(resolve => setTimeout(resolve, 200));
+          }
+
         } catch (error: any) {
-          logger.error(`Erro ao sincronizar agendamento ${appointment.id}:`, error.message);
-          errors++;
+          if (error.response?.status === 404) {
+            logger.info(`Página ${page} retornou 404 - fim da paginação`);
+            break;
+          }
+
+          this.logRequestError(error, `/agendamentos?page=${page}`);
+
+          if (error.code === 'ECONNRESET' || error.code === 'ETIMEDOUT') {
+            logger.warn(`Erro temporário na página ${page}, tentando novamente...`);
+            await new Promise(resolve => setTimeout(resolve, 2000));
+            continue;
+          }
+
+          break;
         }
       }
 
-      logger.info(`Sincronização de agendamentos concluída: ${synced} sincronizados, ${errors} erros`);
+      const expected = totalExpected > 0 ? ` (esperado: ${totalExpected})` : '';
+      logger.info(`Sincronização de agendamentos concluída: ${synced} sincronizados${expected}, ${errors} erros`);
       return { synced, errors };
     } catch (error: any) {
       this.logRequestError(error, '/agendamentos');
-      return { synced: 0, errors: 1 };
+      return { synced, errors: errors + 1 };
     }
   }
 
