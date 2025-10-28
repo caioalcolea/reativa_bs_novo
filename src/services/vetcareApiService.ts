@@ -253,6 +253,7 @@ export class VetCareApiService {
     let page = 1;
     let hasMorePages = true;
     let totalPetsExpected = 0;
+    const seenIds = new Set<number>(); // Rastrear IDs já vistos para detectar duplicatas
 
     try {
       while (hasMorePages) {
@@ -299,9 +300,24 @@ export class VetCareApiService {
             logger.info(`Sem metadados de paginação. Estrutura: ${JSON.stringify(Object.keys(responseData)).substring(0, 200)}`);
           }
 
-          // Limite de segurança: máximo 500 páginas
-          if (page >= 500) {
-            logger.warn(`Limite de segurança atingido: 500 páginas processadas. Parando sync.`);
+          // Limite de segurança: máximo 200 páginas (4000 pets)
+          if (page >= 200) {
+            logger.warn(`Limite de segurança atingido: 200 páginas processadas. Parando sync.`);
+            hasMorePages = false;
+          }
+
+          // Detectar duplicatas: contar quantos IDs desta página já foram vistos
+          let duplicatesInPage = 0;
+          for (const petData of petsData) {
+            if (seenIds.has(petData.id)) {
+              duplicatesInPage++;
+            }
+          }
+
+          // Se mais de 90% da página são duplicatas, parar (provavelmente em loop)
+          const duplicateRatio = duplicatesInPage / petsData.length;
+          if (duplicateRatio > 0.9) {
+            logger.warn(`Página ${page} contém ${(duplicateRatio * 100).toFixed(1)}% duplicatas (${duplicatesInPage}/${petsData.length}). Provavelmente fim da paginação.`);
             hasMorePages = false;
           }
 
@@ -310,6 +326,10 @@ export class VetCareApiService {
             try {
               // A API já retorna a estrutura correta com cliente_id
               const pet = petData as VetCarePet;
+
+              // Registrar ID como visto
+              seenIds.add(pet.id);
+
               const clienteId = pet.cliente_id || petData.cliente?.id;
 
               if (!clienteId) {
@@ -551,6 +571,7 @@ export class VetCareApiService {
     let page = 1;
     let hasMorePages = true;
     let totalExpected = 0;
+    const seenIds = new Set<number>(); // Rastrear IDs já vistos para detectar duplicatas
 
     try {
       while (hasMorePages) {
@@ -592,15 +613,33 @@ export class VetCareApiService {
             logger.info(`Sem metadados de paginação. Estrutura: ${JSON.stringify(Object.keys(responseData)).substring(0, 200)}`);
           }
 
-          // Limite de segurança: máximo 500 páginas
-          if (page >= 500) {
-            logger.warn(`Limite de segurança atingido: 500 páginas processadas. Parando sync.`);
+          // Limite de segurança: máximo 150 páginas (420k agendamentos)
+          if (page >= 150) {
+            logger.warn(`Limite de segurança atingido: 150 páginas processadas. Parando sync.`);
+            hasMorePages = false;
+          }
+
+          // Detectar duplicatas: contar quantos IDs desta página já foram vistos
+          let duplicatesInPage = 0;
+          for (const appointment of appointments) {
+            if (seenIds.has(appointment.id)) {
+              duplicatesInPage++;
+            }
+          }
+
+          // Se mais de 90% da página são duplicatas, parar (provavelmente em loop)
+          const duplicateRatio = duplicatesInPage / appointments.length;
+          if (duplicateRatio > 0.9) {
+            logger.warn(`Página ${page} contém ${(duplicateRatio * 100).toFixed(1)}% duplicatas (${duplicatesInPage}/${appointments.length}). Provavelmente fim da paginação.`);
             hasMorePages = false;
           }
 
           // Processar agendamentos desta página
           for (const appointment of appointments) {
             try {
+              // Registrar ID como visto
+              seenIds.add(appointment.id);
+
               // Verificar se o pet existe antes de inserir
               const petExists = await database.query(
                 'SELECT id FROM pets WHERE id = $1',
