@@ -561,7 +561,7 @@ export class VetCareApiService {
   }
 
   /**
-   * Sincroniza agendamentos do VetCare com suporte a paginação
+   * Sincroniza agendamentos do VetCare com suporte a paginação e filtro de datas
    */
   async syncAppointments(): Promise<{ synced: number; errors: number }> {
     logger.info('Iniciando sincronização de agendamentos do VetCare');
@@ -573,10 +573,16 @@ export class VetCareApiService {
     let totalExpected = 0;
     const seenIds = new Set<number>(); // Rastrear IDs já vistos para detectar duplicatas
 
+    // Filtrar apenas últimos 4 anos: 2022-01-01 até 2026-12-31
+    const dataInicio = '2022-01-01';
+    const dataFim = '2026-12-31';
+
+    logger.info(`Filtrando agendamentos entre ${dataInicio} e ${dataFim}`);
+
     try {
       while (hasMorePages) {
         try {
-          const endpoint = `/agendamentos?page=${page}`;
+          const endpoint = `/agendamentos?data_inicio=${dataInicio}&data_fim=${dataFim}&page=${page}`;
           logger.info(`GET ${this.config.apiUrl}${endpoint}`);
           const response = await this.client.get<any>(endpoint);
 
