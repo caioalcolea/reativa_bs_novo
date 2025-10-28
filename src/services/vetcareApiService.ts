@@ -41,14 +41,45 @@ interface VetCarePet {
   ativo?: boolean;
 }
 
+// Sub-interfaces para objetos aninhados
+interface VetCareVacina {
+  id: number;
+  nome: string;
+  fabricante?: string;
+  tipo?: string;
+  descricao?: string;
+  preco?: string;
+  ativo?: boolean;
+}
+
+interface VetCareVeterinario {
+  id: number;
+  nome: string;
+  email?: string;
+  crmv?: string;
+  especialidade?: string;
+  telefone?: string;
+}
+
 interface VetCareVacinacao {
   id: number;
-  vacina_nome: string;
-  veterinario_nome?: string;
+  pet_id?: number;
+  vacina_id?: number;
+  veterinario_id?: number;
   data_aplicacao: string;
   proxima_dose?: string;
+  data_proxima_dose?: string;  // Campo alternativo
   dose?: string;
   lote?: string;
+  observacoes?: string;  // Campo que faltava
+  created_at?: string;
+  updated_at?: string;
+  // Campos alternativos (quando não vem objeto aninhado)
+  vacina_nome?: string;
+  veterinario_nome?: string;
+  // Objetos aninhados (quando vem completo)
+  vacina?: VetCareVacina;
+  veterinario?: VetCareVeterinario;
 }
 
 interface VetCareAgendamento {
