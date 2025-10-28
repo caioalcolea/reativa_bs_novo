@@ -2,6 +2,7 @@ import { database } from '../../config/database';
 import { whatsappService } from '../../services/whatsappService';
 import { logger } from '../../utils/logger';
 import { dateHelpers } from '../../utils/dateHelpers';
+import { isAllowedMessagingTime, waitForAllowedMessagingTime, applyMessagingDelay, wasMessageSentToday } from '../../utils/messaging';
 import { Vaccine, ReactivationLog } from '../../types';
 
 export class VaccineReactivation {
@@ -75,36 +76,13 @@ export class VaccineReactivation {
    * Gera mensagem de reativação de vacina
    */
   generateReactivationMessage(vaccine: Vaccine): string {
-    const { daysToReactivate, reactivationType } = dateHelpers.shouldReactivateVaccine(
-      vaccine.next_dose_date || null,
-      new Date(vaccine.application_date),
-      vaccine.is_annual
-    );
-
-    let message = `Olá! 🐾\n\n`;
-    message += `Tudo bem? Aqui é da *Clínica Veterinária*!\n\n`;
-    message += `Estamos entrando em contato para lembrar sobre a vacinação do(a) *${vaccine.pet_name}*.\n\n`;
-
-    if (reactivationType === 'next_dose') {
-      const nextDoseDate = dateHelpers.formatDate(new Date(vaccine.next_dose_date!));
-      message += `📅 A próxima dose da vacina *${vaccine.vaccine_name}* está agendada para *${nextDoseDate}* (em ${daysToReactivate} dias).\n\n`;
-      message += `É muito importante manter a carteirinha de vacinação em dia para garantir a saúde e proteção do seu pet! 💉\n\n`;
-    } else if (reactivationType === 'alternative') {
-      const nextDoseDate = dateHelpers.formatDate(new Date(vaccine.next_dose_date!));
-      message += `⚠️ *ATENÇÃO:* A próxima dose da vacina *${vaccine.vaccine_name}* está próxima: *${nextDoseDate}* (em apenas ${daysToReactivate} dias).\n\n`;
-      message += `Não perca o prazo! É essencial manter a imunização em dia. 💉\n\n`;
-    } else if (reactivationType === 'annual') {
-      const applicationDate = new Date(vaccine.application_date);
-      const nextAnnualDate = dateHelpers.addYears(applicationDate, 1);
-      const formattedDate = dateHelpers.formatDate(nextAnnualDate);
-
-      message += `📅 Está chegando a hora do reforço anual da vacina *${vaccine.vaccine_name}*!\n\n`;
-      message += `A última dose foi em ${dateHelpers.formatDate(applicationDate)} e o próximo reforço deve ser feito por volta de *${formattedDate}* (em ${daysToReactivate} dias).\n\n`;
-      message += `Vacinas anuais como essa são fundamentais para manter a saúde do seu pet em dia! 🐶🐱\n\n`;
-    }
-
-    message += `Gostaria de agendar? Estamos à disposição para marcar um horário! 📞\n\n`;
-    message += `Responda esta mensagem ou ligue para nós! 😊`;
+    // Mensagem personalizada conforme solicitado
+    let message = `📢 *Lembrete de Vacinação – Clínica Bicho Solto* 🐾\n\n`;
+    message += `Olá, *${vaccine.customer_name}*! Tudo bem? 😊\n`;
+    message += `Está na hora da vacinação do(a) *${vaccine.pet_name}* 💉\n\n`;
+    message += `Manter as vacinas em dia é essencial para garantir a saúde e o bem-estar dele(a)! 🐶🐱\n\n`;
+    message += `Podemos agendar o horário e manter a proteção dele(a) em dia?\n\n`;
+    message += `Cuidar de quem a gente ama é o melhor investimento! ❤️`;
 
     return message;
   }
@@ -115,14 +93,15 @@ export class VaccineReactivation {
   async logReactivation(
     customerId: number,
     vaccineId: number,
+    petId: number,
     message: string,
     status: 'success' | 'error',
     errorMessage?: string
   ): Promise<void> {
     const query = `
       INSERT INTO reactivation_logs
-        (customer_id, reactivation_type, message_sent, sent_at, status, error_message)
-      VALUES ($1, 'vaccine', $2, NOW(), $3, $4)
+        (customer_id, pet_id, module, reactivation_type, message_sent, sent_at, status, error_message)
+      VALUES ($1, $2, 'vaccine', 'vaccine', $3, NOW(), $4, $5)
     `;
 
     const messageData = JSON.stringify({
@@ -131,7 +110,7 @@ export class VaccineReactivation {
     });
 
     try {
-      await database.query(query, [customerId, messageData, status, errorMessage || null]);
+      await database.query(query, [customerId, petId, messageData, status, errorMessage || null]);
     } catch (error) {
       logger.error('Erro ao registrar log de reativação:', error);
     }
@@ -139,9 +118,16 @@ export class VaccineReactivation {
 
   /**
    * Processa reativação de vacinas
+   * IMPORTANTE: Apenas envia entre 08:00 e 19:00, nunca de madrugada
    */
   async processVaccineReactivations(): Promise<void> {
     logger.info('Iniciando processamento de reativação de vacinas');
+
+    // Verificar se está no horário permitido (08:00 - 19:00)
+    if (!isAllowedMessagingTime()) {
+      logger.warn('Fora do horário permitido para envio de mensagens (08:00-19:00). Processo abortado.');
+      return;
+    }
 
     try {
       const vaccines = await this.getVaccinesForReactivation();
@@ -153,9 +139,16 @@ export class VaccineReactivation {
 
       let successCount = 0;
       let errorCount = 0;
+      let skippedCount = 0;
 
       for (const vaccine of vaccines) {
         try {
+          // Verificar novamente se ainda está no horário permitido
+          if (!isAllowedMessagingTime()) {
+            logger.warn(`Atingido horário limite (19:00). Parando envios. Faltam ${vaccines.length - successCount - errorCount - skippedCount} mensagens.`);
+            break;
+          }
+
           // Buscar customer_id do pet
           const petQuery = `SELECT customer_id FROM pets WHERE id = $1`;
           const petResult = await database.query<{ customer_id: number }>(petQuery, [vaccine.pet_id]);
@@ -167,10 +160,11 @@ export class VaccineReactivation {
 
           const customerId = petResult[0].customer_id;
 
-          // Verificar se já foi enviado hoje
-          const alreadySent = await this.wasReactivationSentToday(customerId, vaccine.id);
+          // Verificar se já foi enviado hoje (anti-spam: máximo 1 por dia)
+          const alreadySent = await wasMessageSentToday(customerId, vaccine.pet_id, 'vaccine');
           if (alreadySent) {
-            logger.info(`Reativação já enviada hoje para vacina ${vaccine.id}`);
+            logger.info(`Mensagem de vacinação já enviada hoje para ${vaccine.customer_name} - Pet: ${vaccine.pet_name}`);
+            skippedCount++;
             continue;
           }
 
@@ -180,6 +174,7 @@ export class VaccineReactivation {
             await this.logReactivation(
               customerId,
               vaccine.id,
+              vaccine.pet_id,
               '',
               'error',
               'Telefone inválido'
@@ -193,13 +188,14 @@ export class VaccineReactivation {
           const sent = await whatsappService.sendMessage(vaccine.customer_phone, message);
 
           if (sent) {
-            await this.logReactivation(customerId, vaccine.id, message, 'success');
+            await this.logReactivation(customerId, vaccine.id, vaccine.pet_id, message, 'success');
             successCount++;
             logger.info(`Reativação enviada com sucesso para ${vaccine.customer_name} - Pet: ${vaccine.pet_name}`);
           } else {
             await this.logReactivation(
               customerId,
               vaccine.id,
+              vaccine.pet_id,
               message,
               'error',
               'Falha ao enviar mensagem'
@@ -207,15 +203,16 @@ export class VaccineReactivation {
             errorCount++;
           }
 
-          // Aguardar 2 segundos entre cada envio para não sobrecarregar a API
-          await new Promise(resolve => setTimeout(resolve, 2000));
+          // Aguardar 2 minutos entre cada envio (anti-spam)
+          await applyMessagingDelay();
+
         } catch (error: any) {
           logger.error(`Erro ao processar reativação de vacina ${vaccine.id}:`, error);
           errorCount++;
         }
       }
 
-      logger.info(`Reativação de vacinas concluída: ${successCount} sucessos, ${errorCount} erros`);
+      logger.info(`Reativação de vacinas concluída: ${successCount} sucessos, ${errorCount} erros, ${skippedCount} já enviados hoje`);
     } catch (error) {
       logger.error('Erro ao processar reativações de vacinas:', error);
     }

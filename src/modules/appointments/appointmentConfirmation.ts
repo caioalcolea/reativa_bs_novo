@@ -104,8 +104,8 @@ export class AppointmentConfirmation {
 
     const appointmentTypeText = typeTranslations[appointment.appointment_type] || 'Consulta';
 
-    let message = `Olá! 🐾\n\n`;
-    message += `Aqui é da *Clínica Veterinária*!\n\n`;
+    let message = `📢 *Confirmação de Consulta – Clínica Bicho Solto* 🐾\n\n`;
+    message += `Olá, *${appointment.customer_name}*! 😊\n\n`;
     message += `Estamos entrando em contato para *confirmar* a ${appointmentTypeText.toLowerCase()} do(a) *${appointment.pet_name}*:\n\n`;
     message += `📅 *Data:* ${formattedDate}\n`;
     message += `⏰ *Horário:* ${formattedTime}\n`;
@@ -113,6 +113,7 @@ export class AppointmentConfirmation {
     message += `Por favor, confirme a presença respondendo:\n`;
     message += `✅ *SIM* - para confirmar\n`;
     message += `❌ *NÃO* - caso precise remarcar\n\n`;
+    message += `Sua presença é muito importante para a saúde do(a) ${appointment.pet_name}! 💙\n\n`;
     message += `Se precisar de mais informações ou quiser remarcar, estamos à disposição! 😊\n\n`;
     message += `Aguardamos sua confirmação! 📞`;
 

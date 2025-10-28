@@ -244,6 +244,7 @@ export class VetCareApiService {
 
   /**
    * Sincroniza todos os pets do VetCare com suporte a paginação
+   * Limite aumentado para 10.000 pets
    */
   async syncPets(): Promise<{ synced: number; errors: number }> {
     logger.info('Iniciando sincronização de pets do VetCare');
@@ -253,9 +254,11 @@ export class VetCareApiService {
     let page = 1;
     let hasMorePages = true;
     let totalPetsExpected = 0;
+    const seenIds = new Set<number>(); // Rastrear IDs já vistos para detectar duplicatas
+    const MAX_PETS = 10000; // Limite aumentado para 10k
 
     try {
-      while (hasMorePages) {
+      while (hasMorePages && synced < MAX_PETS) {
         try {
           // Tentar diferentes formatos de paginação
           const endpoint = `/pets?page=${page}`;
@@ -287,23 +290,55 @@ export class VetCareApiService {
             const currentPage = meta.current_page || page;
             const lastPage = meta.last_page || meta.total_pages || 0;
 
-            logger.info(`Paginação: página ${currentPage}/${lastPage}, total esperado: ${totalPetsExpected}`);
+            logger.info(`Metadados: página ${currentPage}/${lastPage}, total: ${totalPetsExpected}, items nesta página: ${petsData.length}`);
 
             // Se chegamos na última página
             if (currentPage >= lastPage) {
+              logger.info('Última página detectada via metadados');
               hasMorePages = false;
             }
-          } else if (petsData.length < 20) {
-            // Se não há metadados, assumir que páginas com menos de 20 itens são as últimas
-            logger.info(`Página ${page} com ${petsData.length} pets (< 20) - assumindo última página`);
+          } else {
+            // Sem metadados - logar estrutura da resposta para debug
+            logger.info(`Sem metadados de paginação. Estrutura: ${JSON.stringify(Object.keys(responseData)).substring(0, 200)}`);
+          }
+
+          // Limite de segurança: máximo 500 páginas (10k pets com 20 por página)
+          if (page >= 500) {
+            logger.warn(`Limite de segurança atingido: 500 páginas processadas. Parando sync.`);
+            hasMorePages = false;
+          }
+
+          // Detectar duplicatas: contar quantos IDs desta página já foram vistos
+          let duplicatesInPage = 0;
+          for (const petData of petsData) {
+            if (seenIds.has(petData.id)) {
+              duplicatesInPage++;
+            }
+          }
+
+          // Se mais de 90% da página são duplicatas, parar (provavelmente em loop)
+          const duplicateRatio = duplicatesInPage / petsData.length;
+          if (duplicateRatio > 0.9) {
+            logger.warn(`Página ${page} contém ${(duplicateRatio * 100).toFixed(1)}% duplicatas (${duplicatesInPage}/${petsData.length}). Provavelmente fim da paginação.`);
             hasMorePages = false;
           }
 
           // Processar pets desta página
           for (const petData of petsData) {
+            // Verificar limite de 10k
+            if (synced >= MAX_PETS) {
+              logger.warn(`Limite de ${MAX_PETS} pets atingido. Parando sincronização.`);
+              hasMorePages = false;
+              break;
+            }
+
             try {
               // A API já retorna a estrutura correta com cliente_id
               const pet = petData as VetCarePet;
+
+              // Registrar ID como visto
+              seenIds.add(pet.id);
+
               const clienteId = pet.cliente_id || petData.cliente?.id;
 
               if (!clienteId) {
@@ -363,7 +398,7 @@ export class VetCareApiService {
 
               // Log a cada 100 pets para acompanhar progresso
               if (synced % 100 === 0) {
-                const expected = totalPetsExpected > 0 ? `/${totalPetsExpected}` : '';
+                const expected = totalPetsExpected > 0 ? `/${Math.min(totalPetsExpected, MAX_PETS)}` : `/${MAX_PETS}`;
                 logger.info(`Progresso: ${synced}${expected} pets sincronizados`);
               }
             } catch (error: any) {
@@ -401,7 +436,7 @@ export class VetCareApiService {
         }
       }
 
-      const expected = totalPetsExpected > 0 ? ` (esperado: ${totalPetsExpected})` : '';
+      const expected = totalPetsExpected > 0 ? ` (esperado: ${Math.min(totalPetsExpected, MAX_PETS)})` : ` (limite: ${MAX_PETS})`;
       logger.info(`Sincronização de pets concluída: ${synced} sincronizados${expected}, ${errors} erros`);
       return { synced, errors };
     } catch (error: any) {
@@ -535,7 +570,7 @@ export class VetCareApiService {
   }
 
   /**
-   * Sincroniza agendamentos do VetCare com suporte a paginação
+   * Sincroniza agendamentos do VetCare com suporte a paginação e filtro de datas
    */
   async syncAppointments(): Promise<{ synced: number; errors: number }> {
     logger.info('Iniciando sincronização de agendamentos do VetCare');
@@ -545,11 +580,18 @@ export class VetCareApiService {
     let page = 1;
     let hasMorePages = true;
     let totalExpected = 0;
+    const seenIds = new Set<number>(); // Rastrear IDs já vistos para detectar duplicatas
+
+    // Filtrar apenas últimos 4 anos: 2022-01-01 até 2026-12-31
+    const dataInicio = '2022-01-01';
+    const dataFim = '2026-12-31';
+
+    logger.info(`Filtrando agendamentos entre ${dataInicio} e ${dataFim}`);
 
     try {
       while (hasMorePages) {
         try {
-          const endpoint = `/agendamentos?page=${page}`;
+          const endpoint = `/agendamentos?data_inicio=${dataInicio}&data_fim=${dataFim}&page=${page}`;
           logger.info(`GET ${this.config.apiUrl}${endpoint}`);
           const response = await this.client.get<any>(endpoint);
 
@@ -575,19 +617,44 @@ export class VetCareApiService {
             const currentPage = meta.current_page || page;
             const lastPage = meta.last_page || meta.total_pages || 0;
 
-            logger.info(`Paginação: página ${currentPage}/${lastPage}, total esperado: ${totalExpected}`);
+            logger.info(`Metadados: página ${currentPage}/${lastPage}, total: ${totalExpected}, items nesta página: ${appointments.length}`);
 
             if (currentPage >= lastPage) {
+              logger.info('Última página detectada via metadados');
               hasMorePages = false;
             }
-          } else if (appointments.length < 20) {
-            logger.info(`Página ${page} com ${appointments.length} agendamentos (< 20) - assumindo última página`);
+          } else {
+            // Sem metadados - logar estrutura da resposta para debug
+            logger.info(`Sem metadados de paginação. Estrutura: ${JSON.stringify(Object.keys(responseData)).substring(0, 200)}`);
+          }
+
+          // Limite de segurança: máximo 150 páginas (420k agendamentos)
+          if (page >= 150) {
+            logger.warn(`Limite de segurança atingido: 150 páginas processadas. Parando sync.`);
+            hasMorePages = false;
+          }
+
+          // Detectar duplicatas: contar quantos IDs desta página já foram vistos
+          let duplicatesInPage = 0;
+          for (const appointment of appointments) {
+            if (seenIds.has(appointment.id)) {
+              duplicatesInPage++;
+            }
+          }
+
+          // Se mais de 90% da página são duplicatas, parar (provavelmente em loop)
+          const duplicateRatio = duplicatesInPage / appointments.length;
+          if (duplicateRatio > 0.9) {
+            logger.warn(`Página ${page} contém ${(duplicateRatio * 100).toFixed(1)}% duplicatas (${duplicatesInPage}/${appointments.length}). Provavelmente fim da paginação.`);
             hasMorePages = false;
           }
 
           // Processar agendamentos desta página
           for (const appointment of appointments) {
             try {
+              // Registrar ID como visto
+              seenIds.add(appointment.id);
+
               // Verificar se o pet existe antes de inserir
               const petExists = await database.query(
                 'SELECT id FROM pets WHERE id = $1',
