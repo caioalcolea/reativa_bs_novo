@@ -2,7 +2,6 @@ import cron from 'node-cron';
 import { logger } from '../utils/logger';
 import { config } from '../config';
 import { vaccineReactivation } from '../modules/vaccines/vaccineReactivation';
-import { financialReactivation } from '../modules/financial/financialReactivation';
 import { groomingReactivation } from '../modules/grooming/groomingReactivation';
 import { appointmentConfirmation } from '../modules/appointments/appointmentConfirmation';
 import { satisfactionSurvey } from '../modules/satisfaction/satisfactionSurvey';
@@ -23,9 +22,6 @@ export class Scheduler {
     // Agendar reativação de vacinas
     this.scheduleVaccineReactivation();
 
-    // Agendar reativação financeira
-    this.scheduleFinancialReactivation();
-
     // Agendar reativação de banhos
     this.scheduleGroomingReactivation();
 
@@ -36,6 +32,7 @@ export class Scheduler {
     this.scheduleSatisfactionSurvey();
 
     logger.info('Scheduler iniciado com sucesso');
+    logger.info('NOTA: Módulo de reativação financeira foi removido (endpoint da API quebrado)');
   }
 
   /**
@@ -78,22 +75,11 @@ export class Scheduler {
 
   /**
    * Agenda reativação financeira
+   * REMOVIDO: Endpoint /financeiro/contas-receber está quebrado (erro 500)
    */
-  private scheduleFinancialReactivation(): void {
-    const cronExpression = config.cron.financial;
-
-    const job = cron.schedule(cronExpression, async () => {
-      logger.info('Executando job de reativação financeira');
-      try {
-        await financialReactivation.processFinancialReactivations();
-      } catch (error) {
-        logger.error('Erro ao executar job de reativação financeira:', error);
-      }
-    });
-
-    this.jobs.set('financial', job);
-    logger.info(`Job de reativação financeira agendado: ${cronExpression}`);
-  }
+  // private scheduleFinancialReactivation(): void {
+  //   logger.warn('Reativação financeira desabilitada - endpoint da API quebrado');
+  // }
 
   /**
    * Agenda reativação de banhos
@@ -182,8 +168,7 @@ export class Scheduler {
           await vaccineReactivation.processVaccineReactivations();
           break;
         case 'financial':
-          await financialReactivation.processFinancialReactivations();
-          break;
+          throw new Error('Módulo financeiro foi removido (endpoint da API quebrado)');
         case 'grooming':
           await groomingReactivation.processGroomingReactivations();
           break;

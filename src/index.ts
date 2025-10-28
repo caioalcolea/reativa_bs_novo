@@ -85,11 +85,12 @@ app.get('/', (req: Request, res: Response) => {
     },
     availableJobs: [
       'vaccines',
-      'financial',
       'grooming',
       'appointments',
       'satisfaction',
+      'vetcare_sync',
     ],
+    note: 'Financial reactivation module removed (API endpoint broken)',
   });
 });
 

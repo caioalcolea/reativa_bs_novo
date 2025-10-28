@@ -73,6 +73,17 @@ interface VetCareContaReceber {
   status: string;
 }
 
+interface VetCareFichaBanho {
+  id: number;
+  data: string;
+  retorno?: string;
+  servicos: string;
+  produtos_extras?: string;
+  valor_total: string;
+  observacoes?: string;
+  funcionario_nome?: string;
+}
+
 export class VetCareApiService {
   private client: AxiosInstance;
   private config: VetCareConfig;
@@ -320,16 +331,27 @@ export class VetCareApiService {
 
       for (const vaccine of vaccines) {
         try {
+          // Extrair nome da vacina (pode vir em vacina_nome ou vacina.nome)
+          const vaccineName = vaccine.vacina?.nome || vaccine.vacina_nome;
+          const veterinarianName = vaccine.veterinario?.nome || vaccine.veterinario_nome;
+
+          if (!vaccineName) {
+            logger.warn(`Vacina do pet ${petId} sem nome - pulando`);
+            continue;
+          }
+
           // Determinar se é vacina anual baseado no nome ou intervalo
-          const isAnnual = vaccine.vacina_nome?.toLowerCase().includes('anual') ||
-                          vaccine.vacina_nome?.toLowerCase().includes('raiva') ||
-                          vaccine.vacina_nome?.toLowerCase().includes('v8') ||
-                          vaccine.vacina_nome?.toLowerCase().includes('v10');
+          const isAnnual = vaccineName?.toLowerCase().includes('anual') ||
+                          vaccineName?.toLowerCase().includes('raiva') ||
+                          vaccineName?.toLowerCase().includes('v8') ||
+                          vaccineName?.toLowerCase().includes('v10') ||
+                          vaccineName?.toLowerCase().includes('múltipla') ||
+                          vaccineName?.toLowerCase().includes('multipla');
 
           // Verificar se vacina já existe (baseado em pet_id, nome e data)
           const existing = await database.query(
             'SELECT id FROM vaccines WHERE pet_id = $1 AND vaccine_name = $2 AND application_date = $3',
-            [petId, vaccine.vacina_nome, vaccine.data_aplicacao]
+            [petId, vaccineName, vaccine.data_aplicacao]
           );
 
           if (existing.length > 0) {
@@ -340,11 +362,11 @@ export class VetCareApiService {
                    veterinarian = $4, notes = $5, updated_at = NOW()
                WHERE id = $6`,
               [
-                vaccine.proxima_dose || null,
+                vaccine.proxima_dose || vaccine.data_proxima_dose || null,
                 isAnnual,
                 vaccine.lote || null,
-                vaccine.veterinario_nome || null,
-                vaccine.dose || null,
+                veterinarianName || null,
+                vaccine.dose || vaccine.observacoes || null,
                 existing[0].id,
               ]
             );
@@ -355,13 +377,13 @@ export class VetCareApiService {
                VALUES ($1, $2, $3, $4, $5, $6, $7, $8, NOW())`,
               [
                 petId,
-                vaccine.vacina_nome,
+                vaccineName,
                 vaccine.data_aplicacao,
-                vaccine.proxima_dose || null,
+                vaccine.proxima_dose || vaccine.data_proxima_dose || null,
                 isAnnual,
                 vaccine.lote || null,
-                vaccine.veterinario_nome || null,
-                vaccine.dose || null,
+                veterinarianName || null,
+                vaccine.dose || vaccine.observacoes || null,
               ]
             );
           }
@@ -510,95 +532,124 @@ export class VetCareApiService {
 
   /**
    * Sincroniza contas a receber do VetCare
-   * Busca para cada cliente individualmente
+   * REMOVIDO: Endpoint /financeiro/contas-receber está quebrado (erro 500)
    */
   async syncFinancialDebts(): Promise<{ synced: number; errors: number }> {
-    logger.info('Iniciando sincronização de contas a receber do VetCare');
+    logger.warn('Sincronização de contas a receber desabilitada - endpoint da API quebrado');
+    return { synced: 0, errors: 0 };
+  }
+
+  /**
+   * Sincroniza fichas de banho de um pet específico
+   */
+  async syncPetGroomingRecords(petId: number): Promise<{ synced: number; errors: number }> {
+    try {
+      const response = await this.client.get<VetCareFichaBanho[]>(`/pets/${petId}/fichas-banho`);
+      const records = response.data;
+
+      if (!Array.isArray(records) || records.length === 0) {
+        return { synced: 0, errors: 0 };
+      }
+
+      let synced = 0;
+      let errors = 0;
+
+      for (const record of records) {
+        try {
+          // Parsear data (formato: DD/MM/YYYY)
+          const dataParts = record.data.split('/');
+          const serviceDate = dataParts.length === 3
+            ? `${dataParts[2]}-${dataParts[1]}-${dataParts[0]}`
+            : record.data;
+
+          // Determinar tipo de serviço
+          const servicos = record.servicos?.toLowerCase() || '';
+          let serviceType = 'banho';
+          if (servicos.includes('tosa') && servicos.includes('banho')) {
+            serviceType = 'banho_tosa';
+          } else if (servicos.includes('tosa')) {
+            serviceType = 'tosa';
+          }
+
+          // Verificar se registro já existe (por pet_id e data)
+          const existing = await database.query(
+            'SELECT id FROM grooming_services WHERE pet_id = $1 AND service_date = $2',
+            [petId, serviceDate]
+          );
+
+          if (existing.length > 0) {
+            // Atualizar registro existente
+            await database.query(
+              `UPDATE grooming_services
+               SET service_type = $1, notes = $2, updated_at = NOW()
+               WHERE id = $3`,
+              [
+                serviceType,
+                record.observacoes || null,
+                existing[0].id,
+              ]
+            );
+          } else {
+            // Inserir novo registro
+            await database.query(
+              `INSERT INTO grooming_services (pet_id, service_date, service_type, has_plan, notes, created_at)
+               VALUES ($1, $2, $3, $4, $5, NOW())`,
+              [
+                petId,
+                serviceDate,
+                serviceType,
+                false, // Por padrão assume que não tem plano
+                record.observacoes || null,
+              ]
+            );
+          }
+
+          synced++;
+        } catch (error: any) {
+          logger.error(`Erro ao sincronizar ficha de banho ${record.id} do pet ${petId}:`, error.message);
+          errors++;
+        }
+      }
+
+      return { synced, errors };
+    } catch (error: any) {
+      // Pet sem fichas de banho é normal
+      if (error.response?.status === 404) {
+        return { synced: 0, errors: 0 };
+      }
+      this.logRequestError(error, `/pets/${petId}/fichas-banho`);
+      return { synced: 0, errors: 1 };
+    }
+  }
+
+  /**
+   * Sincroniza todas as fichas de banho de todos os pets
+   */
+  async syncAllGroomingRecords(): Promise<{ synced: number; errors: number }> {
+    logger.info('Iniciando sincronização de fichas de banho do VetCare');
 
     try {
-      // Buscar todos os clientes do banco local
-      const customers = await database.query<{ id: number }>('SELECT id FROM customers');
-
-      logger.info(`Sincronizando contas a receber de ${customers.length} clientes...`);
+      // Buscar todos os pets do banco local
+      const pets = await database.query<{ id: number }>('SELECT id FROM pets');
 
       let totalSynced = 0;
       let totalErrors = 0;
 
-      for (const customer of customers) {
-        try {
-          const response = await this.client.get<VetCareContaReceber[]>('/financeiro/contas-receber', {
-            params: { cliente_id: customer.id }
-          });
-          const records = response.data;
+      logger.info(`Sincronizando fichas de banho de ${pets.length} pets...`);
 
-          if (!Array.isArray(records) || records.length === 0) {
-            continue; // Cliente sem débitos
-          }
+      for (const pet of pets) {
+        const result = await this.syncPetGroomingRecords(pet.id);
+        totalSynced += result.synced;
+        totalErrors += result.errors;
 
-          for (const record of records) {
-            try {
-              const isPaid = record.status?.toLowerCase() === 'pago' || record.data_pagamento !== null;
-
-              // Verificar se débito já existe
-              const existing = await database.query(
-                'SELECT id FROM financial_debts WHERE id = $1',
-                [record.id]
-              );
-
-              if (existing.length > 0) {
-                // Atualizar débito existente
-                await database.query(
-                  `UPDATE financial_debts
-                   SET customer_id = $1, service_date = $2, amount = $3,
-                       description = $4, paid = $5, updated_at = NOW()
-                   WHERE id = $6`,
-                  [
-                    record.cliente_id,
-                    record.data_vencimento,
-                    record.valor,
-                    record.descricao || 'Serviço veterinário',
-                    isPaid,
-                    record.id,
-                  ]
-                );
-              } else {
-                // Inserir novo débito
-                await database.query(
-                  `INSERT INTO financial_debts (id, customer_id, service_date, amount, description, paid, created_at)
-                   VALUES ($1, $2, $3, $4, $5, $6, NOW())`,
-                  [
-                    record.id,
-                    record.cliente_id,
-                    record.data_vencimento,
-                    record.valor,
-                    record.descricao || 'Serviço veterinário',
-                    isPaid,
-                  ]
-                );
-              }
-
-              totalSynced++;
-            } catch (error: any) {
-              logger.error(`Erro ao sincronizar conta ${record.id}:`, error.message);
-              totalErrors++;
-            }
-          }
-
-          // Aguardar 50ms entre cada cliente
-          await new Promise(resolve => setTimeout(resolve, 50));
-        } catch (error: any) {
-          // Cliente sem contas é normal
-          if (error.response?.status !== 404) {
-            logger.error(`Erro ao buscar contas do cliente ${customer.id}:`, error.message);
-            totalErrors++;
-          }
-        }
+        // Aguardar 100ms entre cada pet para não sobrecarregar a API
+        await new Promise(resolve => setTimeout(resolve, 100));
       }
 
-      logger.info(`Sincronização de contas a receber concluída: ${totalSynced} sincronizadas, ${totalErrors} erros`);
+      logger.info(`Sincronização de fichas de banho concluída: ${totalSynced} sincronizadas, ${totalErrors} erros`);
       return { synced: totalSynced, errors: totalErrors };
     } catch (error: any) {
-      logger.error('Erro ao sincronizar contas a receber:', error.message);
+      logger.error('Erro ao sincronizar fichas de banho:', error.message);
       return { synced: 0, errors: 1 };
     }
   }
@@ -618,7 +669,7 @@ export class VetCareApiService {
       pets: await this.syncPets(),
       vaccines: await this.syncAllVaccines(),
       appointments: await this.syncAppointments(),
-      financial: await this.syncFinancialDebts(),
+      grooming: await this.syncAllGroomingRecords(),
     };
 
     const totalTime = ((Date.now() - startTime) / 1000).toFixed(2);
@@ -630,7 +681,8 @@ export class VetCareApiService {
     logger.info(`Pets: ${results.pets.synced} sincronizados, ${results.pets.errors} erros`);
     logger.info(`Vacinas: ${results.vaccines.synced} sincronizadas, ${results.vaccines.errors} erros`);
     logger.info(`Agendamentos: ${results.appointments.synced} sincronizados, ${results.appointments.errors} erros`);
-    logger.info(`Financeiro: ${results.financial.synced} sincronizados, ${results.financial.errors} erros`);
+    logger.info(`Banhos/Tosas: ${results.grooming.synced} sincronizados, ${results.grooming.errors} erros`);
+    logger.info('NOTA: Sincronização financeira desabilitada (endpoint da API quebrado)');
     logger.info('========================================');
   }
 }

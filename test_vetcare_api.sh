@@ -139,38 +139,38 @@ echo ""
 # Teste 1: Clientes
 test_endpoint "GET" "/clientes" "Teste 1: Buscar Clientes"
 
-# Teste 2: Pets
-test_endpoint "GET" "/pets" "Teste 2: Buscar Pets"
+# Teste 2: Cliente específico (Caio Alcolea - ID 3390)
+test_endpoint "GET" "/clientes/3390/pets" "Teste 2: Buscar Pets do Cliente 3390"
 
-# Pegar primeiro pet ID para testar vacinas
-print_info "Buscando primeiro Pet ID para testar vacinações..."
-pets_response=$(curl -s "$API_BASE_URL/pets")
-first_pet_id=$(echo "$pets_response" | jq -r '(.data[0].id // .[0].id // empty)')
+# Teste 3: Pets (paginado)
+test_endpoint "GET" "/pets" "Teste 3: Buscar Pets (Paginado)"
 
-if [ ! -z "$first_pet_id" ]; then
-    print_success "Pet ID encontrado: $first_pet_id"
-    test_endpoint "GET" "/pets/$first_pet_id/vacinacoes" "Teste 3: Buscar Vacinações do Pet $first_pet_id"
-else
-    print_warning "Nenhum Pet ID encontrado - pulando teste de vacinações"
-fi
+# Usar Pet ID real: 4959 (Marlon - Cão)
+print_info "Usando Pet ID 4959 (Marlon) para testes detalhados..."
 
-# Teste 4: Agendamentos
-test_endpoint "GET" "/agendamentos" "Teste 4: Buscar Agendamentos"
+# Teste 4: Detalhes completos do Pet
+test_endpoint "GET" "/pets/4959" "Teste 4: Detalhes Completos do Pet 4959"
 
-# Pegar primeiro cliente ID para testar financeiro
-print_info "Buscando primeiro Cliente ID para testar contas a receber..."
-clientes_response=$(curl -s "$API_BASE_URL/clientes")
-first_cliente_id=$(echo "$clientes_response" | jq -r '(.data[0].id // .[0].id // empty)')
+# Teste 5: Vacinações do Pet
+test_endpoint "GET" "/pets/4959/vacinacoes" "Teste 5: Vacinações do Pet 4959"
 
-if [ ! -z "$first_cliente_id" ]; then
-    print_success "Cliente ID encontrado: $first_cliente_id"
-    test_endpoint "GET" "/financeiro/contas-receber?cliente_id=$first_cliente_id" "Teste 5: Buscar Contas a Receber do Cliente $first_cliente_id"
-else
-    print_warning "Nenhum Cliente ID encontrado - pulando teste de contas a receber"
-fi
+# Teste 6: Histórico Médico
+test_endpoint "GET" "/pets/4959/historico-medico" "Teste 6: Histórico Médico do Pet 4959"
 
-# Teste adicional: Buscar todas as contas a receber (sem filtro)
-test_endpoint "GET" "/financeiro/contas-receber" "Teste 6: Buscar Todas Contas a Receber (sem filtro)"
+# Teste 7: Histórico de Peso
+test_endpoint "GET" "/pets/4959/historico-peso" "Teste 7: Histórico de Peso do Pet 4959"
+
+# Teste 8: Fichas de Banho/Tosa
+test_endpoint "GET" "/pets/4959/fichas-banho" "Teste 8: Fichas de Banho do Pet 4959"
+
+# Teste 9: Estatísticas do Pet
+test_endpoint "GET" "/pets/4959/estatisticas" "Teste 9: Estatísticas do Pet 4959"
+
+# Teste 10: Agendamentos
+test_endpoint "GET" "/agendamentos" "Teste 10: Buscar Agendamentos"
+
+# Teste 11: Agendamentos do Cliente
+test_endpoint "GET" "/agendamentos?cliente_id=3390" "Teste 11: Agendamentos do Cliente 3390"
 
 # Resumo final
 print_header "RESUMO DOS TESTES"
@@ -233,18 +233,34 @@ if [ -f "$LOG_DIR/${TIMESTAMP}__pets.json" ]; then
 fi
 
 # Verificar vacinas
-if [ ! -z "$first_pet_id" ] && [ -f "$LOG_DIR/${TIMESTAMP}__pets_${first_pet_id}_vacinacoes.json" ]; then
+if [ -f "$LOG_DIR/${TIMESTAMP}__pets_4959_vacinacoes.json" ]; then
     print_info "VACINAS - Mapeamento:"
+    echo "  VetCare API             → Banco PostgreSQL"
+    echo "  ───────────────────────────────────────────"
+    echo "  id                      → id (SERIAL PRIMARY KEY)"
+    echo "  pet_id                  → pet_id (FK pets)"
+    echo "  vacina.nome             → vaccine_name (VARCHAR 255)"
+    echo "  data_aplicacao          → application_date (DATE)"
+    echo "  proxima_dose            → next_dose_date (DATE)"
+    echo "  lote                    → batch_number (VARCHAR 50)"
+    echo "  veterinario.nome        → veterinarian (VARCHAR 255)"
+    echo "  [auto-detectado]        → is_annual (BOOLEAN)"
+    echo ""
+fi
+
+# Verificar fichas de banho
+if [ -f "$LOG_DIR/${TIMESTAMP}__pets_4959_fichas-banho.json" ]; then
+    print_info "FICHAS DE BANHO - Mapeamento:"
     echo "  VetCare API       → Banco PostgreSQL"
     echo "  ─────────────────────────────────────"
-    echo "  id                → id (gerado local)"
-    echo "  pet_id            → pet_id (FK pets)"
-    echo "  vacina_nome       → vaccine_name (VARCHAR 255)"
-    echo "  data_aplicacao    → application_date (DATE)"
-    echo "  proxima_dose      → next_dose_date (DATE)"
-    echo "  lote              → batch_number (VARCHAR 50)"
-    echo "  veterinario_nome  → veterinarian (VARCHAR 255)"
-    echo "  [auto-detectado]  → is_annual (BOOLEAN)"
+    echo "  id                → id (SERIAL PRIMARY KEY)"
+    echo "  pet_id            → pet_id (FK pets) [4959]"
+    echo "  data              → service_date (DATE)"
+    echo "  retorno           → [usado para calcular next_service]"
+    echo "  servicos          → service_type (grooming_services)"
+    echo "  valor_total       → [não usado]"
+    echo "  funcionario_nome  → [não usado]"
+    echo "  has_plan          → [detectar se tem plano]"
     echo ""
 fi
 
@@ -263,19 +279,18 @@ if [ -f "$LOG_DIR/${TIMESTAMP}__agendamentos.json" ]; then
     echo ""
 fi
 
-# Verificar financeiro
-if [ -f "$LOG_DIR/${TIMESTAMP}__financeiro_contas-receber_cliente_id*.json" ] || [ -f "$LOG_DIR/${TIMESTAMP}__financeiro_contas-receber.json" ]; then
-    print_info "CONTAS A RECEBER - Mapeamento:"
-    echo "  VetCare API       → Banco PostgreSQL"
-    echo "  ─────────────────────────────────────"
-    echo "  id                → id (SERIAL PRIMARY KEY)"
-    echo "  cliente_id        → customer_id (FK customers)"
-    echo "  valor             → amount (NUMERIC 10,2)"
-    echo "  data_vencimento   → service_date (DATE)"
-    echo "  descricao         → description (TEXT)"
-    echo "  status            → paid (BOOLEAN)"
-    echo "  data_pagamento    → [usado para calcular paid]"
-    echo ""
-fi
-
 echo -e "${GREEN}Análise de mapeamento concluída!${NC}\n"
+
+print_header "OBSERVAÇÕES IMPORTANTES"
+echo -e "${YELLOW}Endpoint /financeiro/contas-receber está quebrado (erro 500)${NC}"
+echo -e "${YELLOW}Módulo de reativação financeira foi REMOVIDO do sistema${NC}"
+echo ""
+echo -e "${GREEN}Novos endpoints descobertos:${NC}"
+echo "  - GET /clientes/{id}/pets"
+echo "  - GET /pets/{id} (detalhes completos)"
+echo "  - GET /pets/{id}/historico-medico"
+echo "  - GET /pets/{id}/historico-peso"
+echo "  - GET /pets/{id}/fichas-banho"
+echo "  - GET /pets/{id}/estatisticas"
+echo ""
+echo -e "${CYAN}Sistema otimizado para usar Pet 4959 (Marlon) como referência${NC}\n"
