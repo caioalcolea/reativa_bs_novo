@@ -45,12 +45,17 @@ export const config = {
     },
   },
   cron: {
-    vetcareSync: process.env.CRON_VETCARE_SYNC || '0 */6 * * *', // A cada 6 horas
-    vaccines: process.env.CRON_VACCINES || '0 9 * * *',          // 09:00 todos os dias
-    financial: process.env.CRON_FINANCIAL || '0 10 * * *',       // 10:00 todos os dias
+    vetcareSync: process.env.CRON_VETCARE_SYNC || '0 9 * * *',   // 09:00 todos os dias (ALTERADO: era a cada 6h)
+    vaccines: process.env.CRON_VACCINES || '30 9 * * *',         // 09:30 todos os dias (após sync)
+    financial: process.env.CRON_FINANCIAL || '0 10 * * *',       // 10:00 todos os dias (DESABILITADO)
     grooming: process.env.CRON_GROOMING || '0 11 * * *',         // 11:00 todos os dias
-    appointments: process.env.CRON_APPOINTMENTS || '0 8 * * *',   // 08:00 todos os dias
-    satisfaction: process.env.CRON_SATISFACTION || '0 * * * *',   // A cada hora
+    appointments: process.env.CRON_APPOINTMENTS || '0 8 * * *',  // 08:00 todos os dias
+    satisfaction: process.env.CRON_SATISFACTION || '0 * * * *',  // A cada hora
+  },
+  messaging: {
+    allowedStartHour: parseInt(process.env.MESSAGING_START_HOUR || '8', 10),  // 08:00
+    allowedEndHour: parseInt(process.env.MESSAGING_END_HOUR || '19', 10),     // 19:00
+    minDelayBetweenMessages: parseInt(process.env.MESSAGING_DELAY_MS || '120000', 10), // 2 minutos em ms
   },
   logging: {
     level: process.env.LOG_LEVEL || 'info',
