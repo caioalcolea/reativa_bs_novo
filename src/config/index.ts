@@ -45,7 +45,7 @@ export const config = {
     },
   },
   cron: {
-    vetcareSync: process.env.CRON_VETCARE_SYNC || '0 9 * * *',   // 09:00 todos os dias (ALTERADO: era a cada 6h)
+    vetcareSync: process.env.CRON_VETCARE_SYNC || '0 4 * * *',   // 04:00 todos os dias (menor fluxo)
     vaccines: process.env.CRON_VACCINES || '30 9 * * *',         // 09:30 todos os dias (após sync)
     financial: process.env.CRON_FINANCIAL || '0 10 * * *',       // 10:00 todos os dias (DESABILITADO)
     grooming: process.env.CRON_GROOMING || '0 11 * * *',         // 11:00 todos os dias

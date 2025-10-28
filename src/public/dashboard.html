@@ -3,155 +3,344 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Dashboard - Bot Reativação Veterinária</title>
+    <title>Clínica Bicho Solto - Dashboard</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <style>
-        .stat-card { transition: transform 0.2s; }
-        .stat-card:hover { transform: translateY(-2px); }
-        .pulse-success { animation: pulse-success 2s infinite; }
-        @keyframes pulse-success {
-            0%, 100% { background-color: rgb(34, 197, 94); }
-            50% { background-color: rgb(74, 222, 128); }
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap');
+
+        * { font-family: 'Inter', sans-serif; }
+
+        body {
+            background: linear-gradient(135deg, #0f172a 0%, #1e293b 50%, #0f172a 100%);
+            min-height: 100vh;
+        }
+
+        /* Efeito Glass Morphism */
+        .glass {
+            background: rgba(255, 255, 255, 0.05);
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.37);
+        }
+
+        .glass-white {
+            background: rgba(255, 255, 255, 0.95);
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+        }
+
+        /* Animações */
+        @keyframes glow {
+            0%, 100% { box-shadow: 0 0 20px rgba(59, 130, 246, 0.5); }
+            50% { box-shadow: 0 0 40px rgba(59, 130, 246, 0.8); }
+        }
+
+        .glow { animation: glow 2s infinite; }
+
+        @keyframes slideUp {
+            from { opacity: 0; transform: translateY(30px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        .animate-slide-up { animation: slideUp 0.6s ease-out forwards; }
+
+        @keyframes pulse-dot {
+            0%, 100% { opacity: 1; transform: scale(1); }
+            50% { opacity: 0.5; transform: scale(1.2); }
+        }
+
+        .pulse-dot { animation: pulse-dot 2s infinite; }
+
+        /* Cards modernos */
+        .stat-card {
+            transition: all 0.3s ease;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .stat-card:hover {
+            transform: translateY(-5px) scale(1.02);
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+        }
+
+        .stat-card::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: -100%;
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.1), transparent);
+            transition: left 0.5s;
+        }
+
+        .stat-card:hover::before {
+            left: 100%;
+        }
+
+        /* Gradient text */
+        .gradient-text {
+            background: linear-gradient(135deg, #3b82f6 0%, #8b5cf6 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+
+        /* Status online */
+        .status-online {
+            width: 12px;
+            height: 12px;
+            background: #10b981;
+            border-radius: 50%;
+            display: inline-block;
+            margin-right: 8px;
+            box-shadow: 0 0 10px #10b981;
+        }
+
+        /* Botões hi-tech */
+        .btn-hitech {
+            position: relative;
+            overflow: hidden;
+            transition: all 0.3s;
+        }
+
+        .btn-hitech::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: -100%;
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.3), transparent);
+            transition: left 0.5s;
+        }
+
+        .btn-hitech:hover::before {
+            left: 100%;
+        }
+
+        /* Progress bar animado */
+        @keyframes progress {
+            from { width: 0%; }
+        }
+
+        .progress-bar {
+            animation: progress 1.5s ease-out;
+        }
+
+        /* Tabela moderna */
+        .table-row:hover {
+            background: rgba(59, 130, 246, 0.1);
+            transform: scale(1.01);
+            transition: all 0.2s;
         }
     </style>
 </head>
-<body class="bg-gray-100">
+<body class="antialiased">
+    <!-- Background pattern -->
+    <div class="fixed inset-0 opacity-10">
+        <div class="absolute inset-0" style="background-image: radial-gradient(circle, #3b82f6 1px, transparent 1px); background-size: 50px 50px;"></div>
+    </div>
+
     <!-- Header -->
-    <header class="bg-gradient-to-r from-blue-600 to-purple-600 text-white shadow-lg">
-        <div class="container mx-auto px-4 py-6">
+    <header class="glass relative z-10 border-b border-gray-700/50">
+        <div class="max-w-7xl mx-auto px-6 py-4">
             <div class="flex items-center justify-between">
-                <div>
-                    <h1 class="text-3xl font-bold">🐾 Bot Reativação Veterinária</h1>
-                    <p class="text-blue-100 mt-1">Painel de Controle e Monitoramento</p>
+                <div class="flex items-center space-x-4">
+                    <img src="https://talkhub.me/image/logo-9.png" alt="Clínica Bicho Solto" class="h-16 w-auto drop-shadow-2xl">
+                    <div>
+                        <h1 class="text-2xl font-bold text-white flex items-center">
+                            Clínica Bicho Solto
+                            <span class="status-online pulse-dot ml-3"></span>
+                        </h1>
+                        <p class="text-gray-400 text-sm mt-1">Sistema de Reativação Automática</p>
+                    </div>
                 </div>
                 <div class="text-right">
-                    <div class="text-sm text-blue-100">Última atualização</div>
-                    <div id="last-update" class="text-xl font-semibold">--:--:--</div>
+                    <div class="text-xs text-gray-400 uppercase tracking-wider">Última atualização</div>
+                    <div id="last-update" class="text-xl font-bold text-blue-400 font-mono">--:--:--</div>
+                    <div class="text-xs text-emerald-400 mt-1">
+                        <i class="fas fa-circle text-emerald-400 text-xs mr-1"></i>
+                        Online
+                    </div>
                 </div>
             </div>
         </div>
     </header>
 
-    <div class="container mx-auto px-4 py-8">
-        <!-- Cards de Estatísticas -->
+    <div class="max-w-7xl mx-auto px-6 py-8 relative z-10">
+        <!-- Stats Cards -->
         <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
-            <!-- Mensagens Hoje -->
-            <div class="stat-card bg-white rounded-lg shadow-md p-6">
-                <div class="flex items-center justify-between">
-                    <div>
-                        <p class="text-gray-500 text-sm">Mensagens Hoje</p>
-                        <p id="messages-today" class="text-3xl font-bold text-blue-600">0</p>
+            <!-- Card 1: Mensagens Hoje -->
+            <div class="stat-card glass-white rounded-2xl p-6 animate-slide-up" style="animation-delay: 0.1s;">
+                <div class="flex items-center justify-between mb-4">
+                    <div class="bg-gradient-to-br from-blue-500 to-blue-600 rounded-xl p-3 shadow-lg">
+                        <i class="fas fa-paper-plane text-white text-2xl"></i>
                     </div>
-                    <div class="bg-blue-100 rounded-full p-4">
-                        <i class="fas fa-paper-plane text-blue-600 text-2xl"></i>
+                    <div class="text-right">
+                        <p class="text-xs text-gray-500 font-medium uppercase tracking-wider">Hoje</p>
+                        <p id="messages-today" class="text-3xl font-black gradient-text">0</p>
                     </div>
                 </div>
-                <div class="mt-4">
-                    <span id="success-rate" class="text-sm text-green-600 font-semibold">0% taxa de sucesso</span>
-                </div>
-            </div>
-
-            <!-- Clientes -->
-            <div class="stat-card bg-white rounded-lg shadow-md p-6">
                 <div class="flex items-center justify-between">
-                    <div>
-                        <p class="text-gray-500 text-sm">Total Clientes</p>
-                        <p id="total-customers" class="text-3xl font-bold text-green-600">0</p>
-                    </div>
-                    <div class="bg-green-100 rounded-full p-4">
-                        <i class="fas fa-users text-green-600 text-2xl"></i>
-                    </div>
+                    <span class="text-sm text-gray-600 font-medium">Mensagens Enviadas</span>
+                    <span id="success-rate" class="text-xs bg-emerald-100 text-emerald-700 px-2 py-1 rounded-full font-semibold">0%</span>
+                </div>
+                <div class="mt-3 bg-gray-100 rounded-full h-2 overflow-hidden">
+                    <div id="success-bar" class="progress-bar h-full bg-gradient-to-r from-emerald-400 to-emerald-600" style="width: 0%"></div>
                 </div>
             </div>
 
-            <!-- Pets -->
-            <div class="stat-card bg-white rounded-lg shadow-md p-6">
+            <!-- Card 2: Clientes -->
+            <div class="stat-card glass-white rounded-2xl p-6 animate-slide-up" style="animation-delay: 0.2s;">
+                <div class="flex items-center justify-between mb-4">
+                    <div class="bg-gradient-to-br from-emerald-500 to-emerald-600 rounded-xl p-3 shadow-lg">
+                        <i class="fas fa-users text-white text-2xl"></i>
+                    </div>
+                    <div class="text-right">
+                        <p class="text-xs text-gray-500 font-medium uppercase tracking-wider">Total</p>
+                        <p id="total-customers" class="text-3xl font-black text-emerald-600">0</p>
+                    </div>
+                </div>
                 <div class="flex items-center justify-between">
-                    <div>
-                        <p class="text-gray-500 text-sm">Total Pets</p>
-                        <p id="total-pets" class="text-3xl font-bold text-purple-600">0</p>
-                    </div>
-                    <div class="bg-purple-100 rounded-full p-4">
-                        <i class="fas fa-paw text-purple-600 text-2xl"></i>
-                    </div>
+                    <span class="text-sm text-gray-600 font-medium">Clientes Ativos</span>
+                    <i class="fas fa-arrow-up text-emerald-500 text-sm"></i>
                 </div>
             </div>
 
-            <!-- Débitos -->
-            <div class="stat-card bg-white rounded-lg shadow-md p-6">
+            <!-- Card 3: Pets -->
+            <div class="stat-card glass-white rounded-2xl p-6 animate-slide-up" style="animation-delay: 0.3s;">
+                <div class="flex items-center justify-between mb-4">
+                    <div class="bg-gradient-to-br from-purple-500 to-purple-600 rounded-xl p-3 shadow-lg">
+                        <i class="fas fa-paw text-white text-2xl"></i>
+                    </div>
+                    <div class="text-right">
+                        <p class="text-xs text-gray-500 font-medium uppercase tracking-wider">Total</p>
+                        <p id="total-pets" class="text-3xl font-black text-purple-600">0</p>
+                    </div>
+                </div>
                 <div class="flex items-center justify-between">
-                    <div>
-                        <p class="text-gray-500 text-sm">Débitos Abertos</p>
-                        <p id="total-debts" class="text-3xl font-bold text-red-600">R$ 0</p>
+                    <span class="text-sm text-gray-600 font-medium">Pets Cadastrados</span>
+                    <i class="fas fa-heart text-purple-500 text-sm"></i>
+                </div>
+            </div>
+
+            <!-- Card 4: Agendamentos -->
+            <div class="stat-card glass-white rounded-2xl p-6 animate-slide-up" style="animation-delay: 0.4s;">
+                <div class="flex items-center justify-between mb-4">
+                    <div class="bg-gradient-to-br from-amber-500 to-amber-600 rounded-xl p-3 shadow-lg">
+                        <i class="fas fa-calendar-check text-white text-2xl"></i>
                     </div>
-                    <div class="bg-red-100 rounded-full p-4">
-                        <i class="fas fa-dollar-sign text-red-600 text-2xl"></i>
+                    <div class="text-right">
+                        <p class="text-xs text-gray-500 font-medium uppercase tracking-wider">Próximos</p>
+                        <p id="total-appointments" class="text-3xl font-black text-amber-600">0</p>
                     </div>
+                </div>
+                <div class="flex items-center justify-between">
+                    <span class="text-sm text-gray-600 font-medium">Agendamentos</span>
+                    <i class="fas fa-clock text-amber-500 text-sm"></i>
                 </div>
             </div>
         </div>
 
-        <!-- Gráficos -->
+        <!-- Charts -->
         <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
-            <!-- Mensagens por Tipo -->
-            <div class="bg-white rounded-lg shadow-md p-6">
-                <h3 class="text-xl font-bold mb-4 text-gray-800">📊 Mensagens por Tipo (Hoje)</h3>
-                <canvas id="messages-by-type-chart"></canvas>
+            <!-- Chart 1: Mensagens por Tipo -->
+            <div class="glass-white rounded-2xl p-6 animate-slide-up" style="animation-delay: 0.5s;">
+                <div class="flex items-center justify-between mb-4">
+                    <h3 class="text-lg font-bold text-gray-800 flex items-center">
+                        <i class="fas fa-chart-pie text-blue-500 mr-2"></i>
+                        Mensagens por Tipo
+                    </h3>
+                    <span class="text-xs bg-blue-100 text-blue-700 px-3 py-1 rounded-full font-semibold">Hoje</span>
+                </div>
+                <canvas id="messages-by-type-chart" height="250"></canvas>
             </div>
 
-            <!-- Mensagens nos Últimos 7 Dias -->
-            <div class="bg-white rounded-lg shadow-md p-6">
-                <h3 class="text-xl font-bold mb-4 text-gray-800">📈 Mensagens nos Últimos 7 Dias</h3>
-                <canvas id="messages-timeline-chart"></canvas>
+            <!-- Chart 2: Últimos 7 Dias -->
+            <div class="glass-white rounded-2xl p-6 animate-slide-up" style="animation-delay: 0.6s;">
+                <div class="flex items-center justify-between mb-4">
+                    <h3 class="text-lg font-bold text-gray-800 flex items-center">
+                        <i class="fas fa-chart-line text-purple-500 mr-2"></i>
+                        Evolução Semanal
+                    </h3>
+                    <span class="text-xs bg-purple-100 text-purple-700 px-3 py-1 rounded-full font-semibold">7 Dias</span>
+                </div>
+                <canvas id="messages-timeline-chart" height="250"></canvas>
             </div>
         </div>
 
-        <!-- Ações Rápidas -->
-        <div class="bg-white rounded-lg shadow-md p-6 mb-8">
-            <h3 class="text-xl font-bold mb-4 text-gray-800">⚡ Executar Jobs Manualmente</h3>
-            <div class="grid grid-cols-2 md:grid-cols-3 gap-4">
-                <button onclick="runJob('vetcare_sync')" class="bg-indigo-500 hover:bg-indigo-600 text-white font-semibold py-3 px-4 rounded-lg transition">
-                    <i class="fas fa-sync-alt mr-2"></i> Sync VetCare
+        <!-- Quick Actions -->
+        <div class="glass-white rounded-2xl p-6 mb-8 animate-slide-up" style="animation-delay: 0.7s;">
+            <div class="flex items-center justify-between mb-6">
+                <h3 class="text-lg font-bold text-gray-800 flex items-center">
+                    <i class="fas fa-rocket text-amber-500 mr-2"></i>
+                    Executar Jobs Manualmente
+                </h3>
+                <div class="text-xs text-gray-500 bg-gray-100 px-3 py-1 rounded-full">
+                    <i class="fas fa-info-circle mr-1"></i>
+                    Clique para executar
+                </div>
+            </div>
+            <div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
+                <button onclick="runJob('vetcare_sync')" class="btn-hitech bg-gradient-to-br from-indigo-500 to-indigo-600 hover:from-indigo-600 hover:to-indigo-700 text-white font-semibold py-4 px-4 rounded-xl transition shadow-lg flex flex-col items-center">
+                    <i class="fas fa-sync-alt text-2xl mb-2"></i>
+                    <span class="text-xs">VetCare Sync</span>
                 </button>
-                <button onclick="runJob('vaccines')" class="bg-blue-500 hover:bg-blue-600 text-white font-semibold py-3 px-4 rounded-lg transition">
-                    <i class="fas fa-syringe mr-2"></i> Vacinas
+                <button onclick="runJob('vaccines')" class="btn-hitech bg-gradient-to-br from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700 text-white font-semibold py-4 px-4 rounded-xl transition shadow-lg flex flex-col items-center">
+                    <i class="fas fa-syringe text-2xl mb-2"></i>
+                    <span class="text-xs">Vacinas</span>
                 </button>
-                <button onclick="runJob('financial')" class="bg-green-500 hover:bg-green-600 text-white font-semibold py-3 px-4 rounded-lg transition">
-                    <i class="fas fa-money-bill mr-2"></i> Financeiro
+                <button onclick="runJob('grooming')" class="btn-hitech bg-gradient-to-br from-purple-500 to-purple-600 hover:from-purple-600 hover:to-purple-700 text-white font-semibold py-4 px-4 rounded-xl transition shadow-lg flex flex-col items-center">
+                    <i class="fas fa-shower text-2xl mb-2"></i>
+                    <span class="text-xs">Banhos</span>
                 </button>
-                <button onclick="runJob('grooming')" class="bg-purple-500 hover:bg-purple-600 text-white font-semibold py-3 px-4 rounded-lg transition">
-                    <i class="fas fa-shower mr-2"></i> Banhos
+                <button onclick="runJob('appointments')" class="btn-hitech bg-gradient-to-br from-amber-500 to-amber-600 hover:from-amber-600 hover:to-amber-700 text-white font-semibold py-4 px-4 rounded-xl transition shadow-lg flex flex-col items-center">
+                    <i class="fas fa-calendar-check text-2xl mb-2"></i>
+                    <span class="text-xs">Consultas</span>
                 </button>
-                <button onclick="runJob('appointments')" class="bg-yellow-500 hover:bg-yellow-600 text-white font-semibold py-3 px-4 rounded-lg transition">
-                    <i class="fas fa-calendar-check mr-2"></i> Consultas
+                <button onclick="runJob('satisfaction')" class="btn-hitech bg-gradient-to-br from-pink-500 to-pink-600 hover:from-pink-600 hover:to-pink-700 text-white font-semibold py-4 px-4 rounded-xl transition shadow-lg flex flex-col items-center">
+                    <i class="fas fa-star text-2xl mb-2"></i>
+                    <span class="text-xs">Satisfação</span>
                 </button>
-                <button onclick="runJob('satisfaction')" class="bg-pink-500 hover:bg-pink-600 text-white font-semibold py-3 px-4 rounded-lg transition">
-                    <i class="fas fa-star mr-2"></i> Satisfação
+                <button onclick="location.reload()" class="btn-hitech bg-gradient-to-br from-gray-500 to-gray-600 hover:from-gray-600 hover:to-gray-700 text-white font-semibold py-4 px-4 rounded-xl transition shadow-lg flex flex-col items-center">
+                    <i class="fas fa-redo text-2xl mb-2"></i>
+                    <span class="text-xs">Atualizar</span>
                 </button>
             </div>
             <div id="job-result" class="mt-4 hidden"></div>
         </div>
 
-        <!-- Mensagens Recentes -->
-        <div class="bg-white rounded-lg shadow-md p-6">
-            <h3 class="text-xl font-bold mb-4 text-gray-800">📝 Mensagens Recentes</h3>
+        <!-- Recent Messages -->
+        <div class="glass-white rounded-2xl p-6 animate-slide-up" style="animation-delay: 0.8s;">
+            <div class="flex items-center justify-between mb-6">
+                <h3 class="text-lg font-bold text-gray-800 flex items-center">
+                    <i class="fas fa-history text-emerald-500 mr-2"></i>
+                    Mensagens Recentes
+                </h3>
+                <span class="text-xs bg-emerald-100 text-emerald-700 px-3 py-1 rounded-full font-semibold">
+                    <i class="fas fa-sync-alt mr-1"></i>
+                    Auto-refresh 30s
+                </span>
+            </div>
             <div class="overflow-x-auto">
-                <table class="min-w-full divide-y divide-gray-200">
-                    <thead class="bg-gray-50">
-                        <tr>
-                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Data/Hora</th>
-                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Cliente</th>
-                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Telefone</th>
-                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Tipo</th>
-                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Status</th>
+                <table class="min-w-full">
+                    <thead>
+                        <tr class="border-b border-gray-200">
+                            <th class="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">Data/Hora</th>
+                            <th class="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">Cliente</th>
+                            <th class="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">Pet</th>
+                            <th class="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">Tipo</th>
+                            <th class="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">Status</th>
                         </tr>
                     </thead>
-                    <tbody id="recent-messages" class="bg-white divide-y divide-gray-200">
+                    <tbody id="recent-messages" class="divide-y divide-gray-100">
                         <tr>
-                            <td colspan="5" class="px-6 py-4 text-center text-gray-500">
-                                <i class="fas fa-spinner fa-spin mr-2"></i> Carregando...
+                            <td colspan="5" class="px-4 py-8 text-center text-gray-500">
+                                <i class="fas fa-spinner fa-spin mr-2 text-2xl"></i>
+                                <div class="mt-2">Carregando dados...</div>
                             </td>
                         </tr>
                     </tbody>
@@ -161,24 +350,33 @@
     </div>
 
     <!-- Footer -->
-    <footer class="bg-gray-800 text-white text-center py-4 mt-8">
-        <p>🤖 Bot Reativação Veterinária - Automação com Evolution API</p>
-        <p class="text-sm text-gray-400 mt-1">Atualizado automaticamente a cada 30 segundos</p>
+    <footer class="glass relative z-10 border-t border-gray-700/50 mt-12">
+        <div class="max-w-7xl mx-auto px-6 py-6 text-center">
+            <div class="flex items-center justify-center space-x-2 text-gray-400">
+                <i class="fas fa-robot text-blue-400"></i>
+                <span>Sistema de Reativação Automática</span>
+                <span class="text-gray-600">•</span>
+                <span>Clínica Bicho Solto</span>
+                <span class="text-gray-600">•</span>
+                <span>Powered by Evolution API</span>
+            </div>
+            <div class="text-xs text-gray-500 mt-2">
+                © 2025 - Todos os direitos reservados
+            </div>
+        </div>
     </footer>
 
     <script>
         let messagesByTypeChart, messagesTimelineChart;
 
-        // Tradução de tipos
         const typeLabels = {
             vaccine: 'Vacinas',
             financial: 'Financeiro',
-            grooming: 'Banhos',
+            grooming: 'Banhos & Tosa',
             appointment: 'Consultas',
             satisfaction: 'Satisfação'
         };
 
-        // Cores para cada tipo
         const typeColors = {
             vaccine: '#3b82f6',
             financial: '#10b981',
@@ -187,51 +385,56 @@
             satisfaction: '#ec4899'
         };
 
-        // Carregar estatísticas
         async function loadStats() {
             try {
                 const response = await fetch('/api/dashboard/stats');
                 const { data } = await response.json();
 
                 document.getElementById('messages-today').textContent = data.messages.today;
-                document.getElementById('success-rate').textContent = `${data.messages.successRate}% taxa de sucesso`;
-                document.getElementById('total-customers').textContent = data.customers.toLocaleString();
-                document.getElementById('total-pets').textContent = data.pets.toLocaleString();
-                document.getElementById('total-debts').textContent = `R$ ${data.financial.totalDebts.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`;
+                const successRate = data.messages.successRate;
+                document.getElementById('success-rate').textContent = `${successRate}%`;
+                document.getElementById('success-bar').style.width = `${successRate}%`;
+                document.getElementById('total-customers').textContent = data.customers.toLocaleString('pt-BR');
+                document.getElementById('total-pets').textContent = data.pets.toLocaleString('pt-BR');
+                document.getElementById('total-appointments').textContent = (data.appointments || 0).toLocaleString('pt-BR');
 
-                // Atualizar gráfico de mensagens por tipo
                 updateMessagesByTypeChart(data.messagesByType);
             } catch (error) {
                 console.error('Erro ao carregar estatísticas:', error);
             }
         }
 
-        // Carregar mensagens recentes
         async function loadRecentMessages() {
             try {
-                const response = await fetch('/api/dashboard/recent-messages?limit=20');
+                const response = await fetch('/api/dashboard/recent-messages?limit=15');
                 const { data } = await response.json();
 
                 const tbody = document.getElementById('recent-messages');
+                if (data.length === 0) {
+                    tbody.innerHTML = '<tr><td colspan="5" class="px-4 py-8 text-center text-gray-500">Nenhuma mensagem enviada hoje</td></tr>';
+                    return;
+                }
+
                 tbody.innerHTML = data.map(msg => `
-                    <tr class="hover:bg-gray-50">
-                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                            ${new Date(msg.sentAt).toLocaleString('pt-BR')}
+                    <tr class="table-row">
+                        <td class="px-4 py-3 text-sm text-gray-700 font-mono">
+                            ${new Date(msg.sentAt).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })}
                         </td>
-                        <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
+                        <td class="px-4 py-3 text-sm font-medium text-gray-900">
                             ${msg.customer.name}
                         </td>
-                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                            ${msg.customer.phone}
+                        <td class="px-4 py-3 text-sm text-gray-600">
+                            ${msg.pet?.name || '-'}
                         </td>
-                        <td class="px-6 py-4 whitespace-nowrap">
-                            <span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full" style="background-color: ${typeColors[msg.type]}20; color: ${typeColors[msg.type]};">
+                        <td class="px-4 py-3">
+                            <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold" style="background-color: ${typeColors[msg.type]}20; color: ${typeColors[msg.type]};">
                                 ${typeLabels[msg.type] || msg.type}
                             </span>
                         </td>
-                        <td class="px-6 py-4 whitespace-nowrap">
-                            <span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${msg.status === 'success' ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}">
-                                ${msg.status === 'success' ? '✓ Enviado' : '✗ Erro'}
+                        <td class="px-4 py-3">
+                            <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold ${msg.status === 'success' ? 'bg-emerald-100 text-emerald-700' : 'bg-red-100 text-red-700'}">
+                                <i class="fas fa-${msg.status === 'success' ? 'check' : 'times'} mr-1"></i>
+                                ${msg.status === 'success' ? 'Enviado' : 'Erro'}
                             </span>
                         </td>
                     </tr>
@@ -241,19 +444,16 @@
             }
         }
 
-        // Carregar estatísticas por dia
         async function loadStatsByDay() {
             try {
                 const response = await fetch('/api/dashboard/stats-by-day?days=7');
                 const { data } = await response.json();
-
                 updateMessagesTimelineChart(data);
             } catch (error) {
                 console.error('Erro ao carregar estatísticas por dia:', error);
             }
         }
 
-        // Atualizar gráfico de mensagens por tipo
         function updateMessagesByTypeChart(data) {
             const ctx = document.getElementById('messages-by-type-chart').getContext('2d');
 
@@ -268,23 +468,28 @@
                     datasets: [{
                         data: data.map(d => d.count),
                         backgroundColor: data.map(d => typeColors[d.type]),
-                        borderWidth: 2,
-                        borderColor: '#fff'
+                        borderWidth: 3,
+                        borderColor: '#fff',
+                        hoverOffset: 10
                     }]
                 },
                 options: {
                     responsive: true,
-                    maintainAspectRatio: true,
+                    maintainAspectRatio: false,
                     plugins: {
                         legend: {
-                            position: 'bottom'
+                            position: 'bottom',
+                            labels: {
+                                padding: 15,
+                                font: { size: 12, weight: '600' },
+                                usePointStyle: true
+                            }
                         }
                     }
                 }
             });
         }
 
-        // Atualizar gráfico de timeline
         function updateMessagesTimelineChart(data) {
             const ctx = document.getElementById('messages-timeline-chart').getContext('2d');
 
@@ -292,7 +497,6 @@
                 messagesTimelineChart.destroy();
             }
 
-            // Agrupar por data
             const groupedByDate = {};
             data.forEach(item => {
                 if (!groupedByDate[item.date]) {
@@ -309,83 +513,95 @@
             messagesTimelineChart = new Chart(ctx, {
                 type: 'line',
                 data: {
-                    labels: dates.map(d => new Date(d).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' })),
+                    labels: dates.map(d => new Date(d).toLocaleDateString('pt-BR', { day: '2-digit', month: 'short' })),
                     datasets: [{
                         label: 'Total',
                         data: totals,
                         borderColor: '#3b82f6',
-                        backgroundColor: '#3b82f620',
+                        backgroundColor: 'rgba(59, 130, 246, 0.1)',
                         tension: 0.4,
-                        fill: true
+                        fill: true,
+                        borderWidth: 3,
+                        pointRadius: 5,
+                        pointBackgroundColor: '#3b82f6',
+                        pointBorderColor: '#fff',
+                        pointBorderWidth: 2
                     }, {
                         label: 'Sucesso',
                         data: successes,
                         borderColor: '#10b981',
-                        backgroundColor: '#10b98120',
+                        backgroundColor: 'rgba(16, 185, 129, 0.1)',
                         tension: 0.4,
-                        fill: true
+                        fill: true,
+                        borderWidth: 3,
+                        pointRadius: 5,
+                        pointBackgroundColor: '#10b981',
+                        pointBorderColor: '#fff',
+                        pointBorderWidth: 2
                     }]
                 },
                 options: {
                     responsive: true,
-                    maintainAspectRatio: true,
+                    maintainAspectRatio: false,
                     plugins: {
                         legend: {
-                            position: 'bottom'
+                            position: 'bottom',
+                            labels: {
+                                padding: 15,
+                                font: { size: 12, weight: '600' },
+                                usePointStyle: true
+                            }
                         }
                     },
                     scales: {
                         y: {
                             beginAtZero: true,
-                            ticks: {
-                                stepSize: 1
-                            }
+                            ticks: { stepSize: 1, font: { weight: '600' } },
+                            grid: { color: 'rgba(0, 0, 0, 0.05)' }
+                        },
+                        x: {
+                            ticks: { font: { weight: '600' } },
+                            grid: { display: false }
                         }
                     }
                 }
             });
         }
 
-        // Executar job manualmente
         async function runJob(jobName) {
             const resultDiv = document.getElementById('job-result');
-            resultDiv.className = 'mt-4 p-4 rounded-lg';
+            resultDiv.className = 'mt-4 p-4 rounded-xl font-semibold';
             resultDiv.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i> Executando job...';
             resultDiv.classList.remove('hidden');
 
             try {
-                const response = await fetch(`/api/dashboard/run-job/${jobName}`, {
-                    method: 'POST'
-                });
+                const response = await fetch(`/api/dashboard/run-job/${jobName}`, { method: 'POST' });
                 const data = await response.json();
 
                 if (data.success) {
-                    resultDiv.className = 'mt-4 p-4 rounded-lg bg-green-100 text-green-800';
+                    resultDiv.className = 'mt-4 p-4 rounded-xl bg-emerald-100 text-emerald-800 font-semibold';
                     resultDiv.innerHTML = `<i class="fas fa-check-circle mr-2"></i> ${data.message}`;
                 } else {
-                    resultDiv.className = 'mt-4 p-4 rounded-lg bg-red-100 text-red-800';
+                    resultDiv.className = 'mt-4 p-4 rounded-xl bg-red-100 text-red-800 font-semibold';
                     resultDiv.innerHTML = `<i class="fas fa-exclamation-circle mr-2"></i> ${data.message}`;
                 }
 
-                // Recarregar dados após 2 segundos
                 setTimeout(() => {
                     loadStats();
                     loadRecentMessages();
                     resultDiv.classList.add('hidden');
                 }, 3000);
             } catch (error) {
-                resultDiv.className = 'mt-4 p-4 rounded-lg bg-red-100 text-red-800';
+                resultDiv.className = 'mt-4 p-4 rounded-xl bg-red-100 text-red-800 font-semibold';
                 resultDiv.innerHTML = `<i class="fas fa-exclamation-circle mr-2"></i> Erro ao executar job`;
             }
         }
 
-        // Atualizar timestamp
         function updateTimestamp() {
             const now = new Date();
             document.getElementById('last-update').textContent = now.toLocaleTimeString('pt-BR');
         }
 
-        // Carregar tudo
         async function loadAll() {
             updateTimestamp();
             await loadStats();
@@ -393,10 +609,7 @@
             await loadStatsByDay();
         }
 
-        // Inicializar
         loadAll();
-
-        // Auto-refresh a cada 30 segundos
         setInterval(loadAll, 30000);
     </script>
 </body>
