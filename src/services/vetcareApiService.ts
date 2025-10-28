@@ -287,15 +287,21 @@ export class VetCareApiService {
             const currentPage = meta.current_page || page;
             const lastPage = meta.last_page || meta.total_pages || 0;
 
-            logger.info(`Paginação: página ${currentPage}/${lastPage}, total esperado: ${totalPetsExpected}`);
+            logger.info(`Metadados: página ${currentPage}/${lastPage}, total: ${totalPetsExpected}, items nesta página: ${petsData.length}`);
 
             // Se chegamos na última página
             if (currentPage >= lastPage) {
+              logger.info('Última página detectada via metadados');
               hasMorePages = false;
             }
-          } else if (petsData.length < 20) {
-            // Se não há metadados, assumir que páginas com menos de 20 itens são as últimas
-            logger.info(`Página ${page} com ${petsData.length} pets (< 20) - assumindo última página`);
+          } else {
+            // Sem metadados - logar estrutura da resposta para debug
+            logger.info(`Sem metadados de paginação. Estrutura: ${JSON.stringify(Object.keys(responseData)).substring(0, 200)}`);
+          }
+
+          // Limite de segurança: máximo 500 páginas
+          if (page >= 500) {
+            logger.warn(`Limite de segurança atingido: 500 páginas processadas. Parando sync.`);
             hasMorePages = false;
           }
 
@@ -575,13 +581,20 @@ export class VetCareApiService {
             const currentPage = meta.current_page || page;
             const lastPage = meta.last_page || meta.total_pages || 0;
 
-            logger.info(`Paginação: página ${currentPage}/${lastPage}, total esperado: ${totalExpected}`);
+            logger.info(`Metadados: página ${currentPage}/${lastPage}, total: ${totalExpected}, items nesta página: ${appointments.length}`);
 
             if (currentPage >= lastPage) {
+              logger.info('Última página detectada via metadados');
               hasMorePages = false;
             }
-          } else if (appointments.length < 20) {
-            logger.info(`Página ${page} com ${appointments.length} agendamentos (< 20) - assumindo última página`);
+          } else {
+            // Sem metadados - logar estrutura da resposta para debug
+            logger.info(`Sem metadados de paginação. Estrutura: ${JSON.stringify(Object.keys(responseData)).substring(0, 200)}`);
+          }
+
+          // Limite de segurança: máximo 500 páginas
+          if (page >= 500) {
+            logger.warn(`Limite de segurança atingido: 500 páginas processadas. Parando sync.`);
             hasMorePages = false;
           }
 
