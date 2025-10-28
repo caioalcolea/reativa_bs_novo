@@ -244,6 +244,7 @@ export class VetCareApiService {
 
   /**
    * Sincroniza todos os pets do VetCare com suporte a paginação
+   * Limite aumentado para 10.000 pets
    */
   async syncPets(): Promise<{ synced: number; errors: number }> {
     logger.info('Iniciando sincronização de pets do VetCare');
@@ -254,9 +255,10 @@ export class VetCareApiService {
     let hasMorePages = true;
     let totalPetsExpected = 0;
     const seenIds = new Set<number>(); // Rastrear IDs já vistos para detectar duplicatas
+    const MAX_PETS = 10000; // Limite aumentado para 10k
 
     try {
-      while (hasMorePages) {
+      while (hasMorePages && synced < MAX_PETS) {
         try {
           // Tentar diferentes formatos de paginação
           const endpoint = `/pets?page=${page}`;
@@ -300,9 +302,9 @@ export class VetCareApiService {
             logger.info(`Sem metadados de paginação. Estrutura: ${JSON.stringify(Object.keys(responseData)).substring(0, 200)}`);
           }
 
-          // Limite de segurança: máximo 200 páginas (4000 pets)
-          if (page >= 200) {
-            logger.warn(`Limite de segurança atingido: 200 páginas processadas. Parando sync.`);
+          // Limite de segurança: máximo 500 páginas (10k pets com 20 por página)
+          if (page >= 500) {
+            logger.warn(`Limite de segurança atingido: 500 páginas processadas. Parando sync.`);
             hasMorePages = false;
           }
 
@@ -323,6 +325,13 @@ export class VetCareApiService {
 
           // Processar pets desta página
           for (const petData of petsData) {
+            // Verificar limite de 10k
+            if (synced >= MAX_PETS) {
+              logger.warn(`Limite de ${MAX_PETS} pets atingido. Parando sincronização.`);
+              hasMorePages = false;
+              break;
+            }
+
             try {
               // A API já retorna a estrutura correta com cliente_id
               const pet = petData as VetCarePet;
@@ -389,7 +398,7 @@ export class VetCareApiService {
 
               // Log a cada 100 pets para acompanhar progresso
               if (synced % 100 === 0) {
-                const expected = totalPetsExpected > 0 ? `/${totalPetsExpected}` : '';
+                const expected = totalPetsExpected > 0 ? `/${Math.min(totalPetsExpected, MAX_PETS)}` : `/${MAX_PETS}`;
                 logger.info(`Progresso: ${synced}${expected} pets sincronizados`);
               }
             } catch (error: any) {
@@ -427,7 +436,7 @@ export class VetCareApiService {
         }
       }
 
-      const expected = totalPetsExpected > 0 ? ` (esperado: ${totalPetsExpected})` : '';
+      const expected = totalPetsExpected > 0 ? ` (esperado: ${Math.min(totalPetsExpected, MAX_PETS)})` : ` (limite: ${MAX_PETS})`;
       logger.info(`Sincronização de pets concluída: ${synced} sincronizados${expected}, ${errors} erros`);
       return { synced, errors };
     } catch (error: any) {
