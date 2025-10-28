@@ -55,4 +55,9 @@ export const config = {
   logging: {
     level: process.env.LOG_LEVEL || 'info',
   },
+  messaging: {
+    allowedStartHour: parseInt(process.env.MESSAGING_START_HOUR || '8', 10), // 08:00
+    allowedEndHour: parseInt(process.env.MESSAGING_END_HOUR || '19', 10),    // 19:00
+    minDelayBetweenMessages: parseInt(process.env.MESSAGING_DELAY_MS || '120000', 10), // 2 minutos
+  },
 };
