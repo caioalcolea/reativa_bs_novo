@@ -14,7 +14,7 @@ from typing import List, Dict, Any, Optional
 
 # Configurações
 DB_CONFIG = {
-    'host': os.getenv('DB_HOST', 'localhost'),
+    'host': os.getenv('DB_HOST', 'localhost'),  # Padrão localhost para rodar no host
     'port': int(os.getenv('DB_PORT', '5432')),
     'database': os.getenv('DB_NAME', 'bot_reativacao_vet'),
     'user': os.getenv('DB_USER', 'supabase_admin'),
@@ -22,7 +22,7 @@ DB_CONFIG = {
 }
 
 API_BASE_URL = os.getenv('VETCARE_API_URL', 'https://vet.talkhub.me/api')
-MAX_PETS = 6000  # Limite máximo de pets
+MAX_PETS = 10000  # Limite máximo de pets (aumentado para 10k)
 RATE_LIMIT_MS = 150  # Delay entre requests (ms)
 
 # Cores para output
